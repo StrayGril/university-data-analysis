@@ -1,0 +1,583 @@
+---
+title: "Statystyka — Raport z listy 4"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+documentclass: article
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+header-includes:
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \captionsetup{labelfont=bf, font=small}
+toc-title: "Spis Treści"
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+**Adnotacja:** Dla zapewnienia powtarzalności wyników ziarno losowe
+zostało ustawione na **6012026**. \clearpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "cairo_pdf",
+  fig.crop = FALSE,
+  message = FALSE,
+  fig.width = 5.6, 
+  fig.height = 2.8,
+  fig.align = "center",
+  warning = FALSE)
+
+set.seed(6012026)
+library(ggplot2)
+library(kableExtra)
+library(knitr)
+library(patchwork)
+
+# Globalne ustawienia dla siatki na wykresie
+theme_set(theme_bw() + theme(panel.grid.major = element_line(color = "grey80"), panel.grid.minor = element_line(color = "grey90")))
+```
+
+# **Wstęp**
+
+Do realizacji zadań wykorzystano teorię zawartą na liście 4.
+
+```{r}
+############# FUNKCJE STATYSTYK #############
+## Wilcoxon
+statW <- function(X, Y){
+  phi1 <- function(u) sqrt(3) * (2*u - 1)
+  m <- length(X)
+  n <- length(Y)
+  N <- m + n
+  R <- rank(c(X, Y), ties.method = "average") # przypisanie rang
+  U <- (R - 0.5) / N
+  T_phi <- sqrt(m*n/N) * (mean(phi1(U[1:m])) - mean(phi1(U[(m+1):N])))
+  return(T_phi^2)
+}
+
+## Ansari Bradley
+statAB <- function(X, Y) {
+  phi2 <- function(u) sqrt(48) * (0.25 - abs(u - 0.5))
+  m <- length(X)
+  n <- length(Y)
+  N <- m + n
+  R <- rank(c(X, Y), ties.method = "average")
+  U <- (R - 0.5) / N
+  T_phi <- sqrt(m*n/N) * (mean(phi2(U[1:m])) - mean(phi2(U[(m+1):N])))
+  return(T_phi^2)
+}
+
+## Lepage
+statL <- function(X, Y) {
+  L <- statW(X, Y) + statAB(X, Y)
+  return(L)
+}
+
+## Kołmogorow-Smirnow
+statKS <- function(X, Y) {
+  m <- length(X)
+  n <- length(Y)
+  D <- as.numeric(ks.test(X, Y)$statistic)   # sup|F_m - G_n|
+  KS <- sqrt(m*n/(m+n)) * D
+  return(KS)
+}
+
+# Zestawienie statystyk
+stat_all <- function(X, Y) {
+  W  <- statW(X, Y)
+  AB <- statAB(X, Y)
+  c(W = W, AB = AB, L = W + AB, KS = statKS(X, Y))
+}
+stat_names <- c("Wilcoxon", "Ansari-Bradley", "Lepage", "Kołmogorow-Smirnow")
+
+# Wartości krytyczne
+crit_asym <- function(m, n, alpha) {
+  c(
+    W  = qchisq(1 - alpha, df = 1), # chi kwadrat
+    AB = qchisq(1 - alpha, df = 1),
+    L  = qchisq(1 - alpha, df = 2),
+    KS = qsmirnov(1 - alpha, sizes = c(m, n)) * sqrt(m*n/(m+n)) # do KS
+  )
+}
+
+############# FUNKCJE DO RYSOWANIA WYKRESÓW #############
+# Funkcja zerowa (rysuje jeden z wykresów, a chcemy 3 obok)
+power_plot0 <- function(dane, x, xlab, title, show_y = TRUE, ms = FALSE){
+  p <- ggplot(dane, aes(x = .data[[x]], y = moc, color = test)) +
+    geom_line(linewidth = 1.1) +
+    ylim(0, 1) +
+    labs(title = title, x = xlab, y = if (show_y) "Moc" else NULL) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+      axis.line = element_line(color = "black"),
+      axis.ticks = element_line(color = "black"))
+  if (!ms) p <- p + scale_x_continuous(breaks = sort(unique(dane[[x]])))
+  if (ms == TRUE) p <- p + scale_x_continuous(breaks = dane[[x]], labels = dane$xlabel)
+  if (!show_y) p <- p + theme(axis.title.y = element_blank())
+  p
+}
+
+# Jeden parametr
+power_plot <- function(d1, d2, d3, x, xlab, main_title){
+  p1 <- power_plot0(d1, x, xlab, "normalnym", TRUE)
+  p2 <- power_plot0(d2, x, xlab, "logistycznym", FALSE)
+  p3 <- power_plot0(d3, x, xlab, "Cauchy'ego", FALSE)
+  
+  (p1 | p2 | p3) +
+    plot_layout(guides = "collect") +
+    plot_annotation(title = main_title) &
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+}
+
+# Dwa parametry
+power_plot_ms <- function(d1, d2, d3, main_title){
+  prep <- function(d){
+    d$x <- ave(d$mu2, d$test, FUN = seq_along) # bo inaczej wykres nie działają dla kombinacji
+    d$xlabel <- paste0("(", d$mu2, ", ", d$sigma2, ")")
+    d
+  }
+  p1 <- power_plot0(prep(d1), "x", "(μ, σ)", "normalnym", TRUE, TRUE)
+  p2 <- power_plot0(prep(d2), "x", "(μ, σ)", "logistycznym", FALSE, TRUE)
+  p3 <- power_plot0(prep(d3), "x", "(μ, σ)", "Cauchy'ego", FALSE, TRUE) 
+  
+  (p1 | p2 | p3) +
+    plot_layout(guides = "collect") +
+    plot_annotation(title = main_title) &
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+}
+
+############# GLOBALNE PARAMETRY #############
+m <- 20
+m2 <- 50
+n <- 20
+n2 <- 50
+
+times <- 10000
+alpha <- 0.05
+
+mu2_ab <- seq(0.2, 1.4, by = 0.2)
+mu2_c <- seq(0.0, 3.0, by = 0.5)
+
+sigma2_ab <- seq(1.0, 4.0, by = 0.5)
+sigma2_c <- seq(1.0, 7.0, by = 1.0)
+```
+
+## **Zadanie 1. Empiryczne wartości krytyczne**
+
+Wygeneruj $m=n=20$ obserwacji z rozkładu $N(0,1)$. Na ich podstawie
+oblicz wartość statystyk $W$, $AB$, $L$ i $KS$. Doświadczenie powtórz
+10000 razy. Wyznacz wartości krytyczne odpowiadających im testów
+prawostronnych. Czy taki sposób generowania wartości krytycznych jest
+poprawny?
+
+```{r}
+# Symulacja
+sym1 <- function(n = 20, m = 20, mu = 0, sig = 1){
+  X <- rnorm(n, mean = mu, sd = sig)
+  Y <- rnorm(m, mean = mu, sd = sig)
+  return(stat_all(X, Y))
+}
+wyniki1 <- replicate(times, sym1())
+
+# Wartości krytyczne - empiryczne i asymptotyczne do porównania
+crit_emp <- apply(wyniki1, 1, quantile, probs = 1 - alpha)
+crit_as  <- crit_asym(m, n, alpha)
+
+# Zestawienie
+tabela1 <- data.frame(
+  "Nazwa testu" = stat_names,
+  "W. empiryczna" = round(as.numeric(crit_emp), 3),
+  "W. asymptotyczna" = round(crit_as, 3),
+  "Różnica" = abs(round(as.numeric(crit_emp), 3) - round(crit_as, 3)),
+  check.names = FALSE
+)
+
+kable(tabela1, caption = "Porównanie wartości krytycznych empirycznych i asymptotycznych")
+```
+
+**Komentarz:** Dla każdej ze statystyk $W$ (test Wilcoxona), $AB$ (test
+Ansariego-Bradley’ego), $L$ (test Lepage'a) i $KS$
+(Kołmogorowa–Smirnowa) obliczonych zgodnie z teorią z Listy 4,
+zostały wyznaczone empiryczne wartości krytyczne testów prawostronnych
+na poziomie istotności $\alpha=0.05.$ W tym celu dla każdej statystyki
+określono empiryczny kwantyl rzędu $0.95$ jej rozkładu pod warunkiem
+prawdziwości hipotezy zerowej. Oznacza to, że poprawnie otrzymaliśmy
+wartości krytyczne $t_c,$ ponieważ z definicji spełniają one warunek:
+$$\mathbb{P}_{H_0:F=G}(T > t_c) = \alpha,$$ gdzie $T$ oznacza
+odpowiednią statystykę testową, a $F$ i $G$ są dystrybuantami zmiennych
+losowych $X_1, \ldots, X_n$ oraz $Y_1, \ldots, Y_m$, przy czym hipoteza
+zerowa ma postać $H_0\colon F = G.$
+
+Liczebność próby użytej w symulacji ($n=m=20$) nie jest duża, przez co
+można zaobserwować różnice między wartościami empirycznymi a
+asymptotycznymi podanymi w tabeli. Dodatkowo źródłem rozbieżności może
+być losowy charakter symulacji. Wraz ze wzrostem liczebności próby,
+możemy spodziewać się większej dokładności wyników empirycznych. Z
+teorii wiemy, że statystyki $W$ i $AB$ mają asymptotyczny rozkład
+$\chi^2_1,$ natomiast statystyka $L$ jako suma dwóch niezależnych
+statystyk o rozkładzie $\chi^2_1$ ma rozkład $\chi^2_2.$ Otrzymane
+wartości empiryczne są zgodne z tymi przewidywaniami.
+
+## **Zadanie 2. Moc testu w przypadku zmian parametru** $\mu$
+
+Wygeneruj $m=n=20$ obserwacji z parametrami przesunięcia
+$\mu_1=0, \ \mu_2$ oraz skali $\sigma_1=\sigma_2=1$, gdzie parametr
+$\mu_2$ to odpowiednio $\mu_2 \in \{0.2, 0.4, \ldots, 1.4\}$ dla
+rozkładu normalnego i logistycznego oraz
+$\mu_2 \in \{0, 0.5, \ldots, 3\}$ dla rozkładu Cauchy'ego. Na ich
+podstawie oblicz wartość statystyk $W$, $AB$, $L$ i $KS$. Doświadczenie
+powtórz 10000 razy. Oszacuj wartość funkcji mocy analizowanych testów.
+Narysuj wyestymowane funkcje mocy w zależności od parametru $\mu_2$.
+
+```{r}
+# Parametry do zadania
+crit <- crit_emp
+
+# Funkcja mocy
+moc_mu2 <- function(generateX, generateY, mu2) {
+  do.call(rbind, lapply(mu2, function(mu2) {
+    res <- replicate(times, {
+      X <- generateX(m)
+      Y <- generateY(n, mu2)
+      stat_all(X, Y) > crit
+    })
+    data.frame(mu2 = mu2, test = rownames(res), moc = rowMeans(res))
+  }))
+}
+
+# Moce dla rozkladow
+moc_norm_m <- moc_mu2(
+  generateX = function(n) rnorm(n, mean = 0, sd = 1),
+  generateY = function(n, mu2) rnorm(n, mean = mu2, sd = 1),
+  mu2 = mu2_ab
+)
+moc_log_m <- moc_mu2(
+  generateX = function(n) rlogis(n, location = 0, scale = 1),
+  generateY = function(n, mu2) rlogis(n, location = mu2, scale = 1),
+  mu2 = mu2_ab
+)
+moc_cauchy_m <- moc_mu2(
+  generateX = function(n) rcauchy(n, location = 0, scale = 1),
+  generateY = function(n, mu2) rcauchy(n, location = mu2, scale = 1),
+  mu2 = mu2_c
+)
+
+# Wykres
+power_plot(moc_norm_m, moc_log_m, moc_cauchy_m, x = "mu2", xlab = expression(mu[2]), main_title = "Moce testów dla różnych μ w rozkładzie:")
+```
+
+**Komentarz:** Ponieważ rozważamy testy prawostronne na poziomie
+istotności $\alpha=0.05$, oczekujemy, że oszacowana moc
+(prawdopodobieństwo odrzucenia $H_0,$ gdy prawdziwa jest $H_1$) będzie
+na początku zbliżona do $0.05.$ Odchylenia mogą wynikać z losowości i
+małej liczebności próby. Wraz ze wzrostem parametru przesunięcia możemy
+oczekiwać, że ponieważ dystrybuanty różnią się parametrem $\mu,$ różnica
+między dystrybuantami będzie rosła, więc funkcja mocy testu powinna być
+rosnąca i dążyć do 1.
+
+Na wykresach widzimy, że faktycznie taka zależność zachodzi dla testów
+$W, \ L$ i $KS.$ Ponieważ wartości $\mu_2$ w symulacji dla Cauchy'ego są
+ok. 2 razy większe niż dla pozostałych rozkładów, możemy zauważyć, że
+funkcja mocy rośnie prawie identycznie dla rozkładu logistycznego i
+Cauchy'ego, a najszybciej do 1 dąży w przypadku rozkładu normalnego.
+Warto zauważyć również, że najlepiej z ciężkimi ogonami radzi
+sobie test $KS.$
+
+Dla zmian parametru $\mu$ zawodzi zupełnie statystyka testowa $AB,$ a
+dla rozkładów normalnego i logistycznego nawet maleje, co każe
+wnioskować, że radzi sobie ona słabo w przypadku różnicy w parametrze
+przesunięcia.
+
+## **Zadanie 3. Moc testu w przypadku zmian parametru** $\sigma$
+
+Wygeneruj $m=n=20$ obserwacji z parametrami przesunięcia $\mu_1=\mu_2=0$
+oraz skali $\sigma_1=1$ i odpowiednio
+$\sigma_2 \in \{1, 1.5, \ldots, 4\}$ dla rozkładu normalnego i
+logistycznego oraz $\sigma_2\in \{1, 2, \ldots, 7\}$ dla rozkładu
+Cauchy'ego. Oblicz wartość statystyk $W$, $AB$, $L$ i
+$KS$. Doświadczenie powtórz 10000 razy. Oszacuj wartość funkcji mocy
+analizowanych testów. Narysuj wyestymowane funkcje mocy w zależności od
+parametru $\sigma_2$.
+
+```{r}
+# Funkcja mocy
+moc_sigma2 <- function(generateX, generateY, sigma2) {
+  do.call(rbind, lapply(sigma2, function(s2) {
+    res <- replicate(times, {
+      X <- generateX(m)
+      Y <- generateY(n, s2)
+      stat_all(X, Y) > crit
+    })
+    data.frame(sigma2 = s2, test = rownames(res), moc = rowMeans(res))
+  }))
+}
+
+# Moce dla rozkladow
+moc_norm_s <- moc_sigma2(
+  generateX = function(n) rnorm(n, mean = 0, sd = 1),
+  generateY = function(n, s2) rnorm(n, mean = 0, sd = s2),
+  sigma2 = sigma2_ab
+)
+moc_log_s <- moc_sigma2(
+  generateX = function(n) rlogis(n, location = 0, scale = 1),
+  generateY = function(n, s2) rlogis(n, location = 0, scale = s2),
+  sigma2 = sigma2_ab
+)
+moc_cauchy_s <- moc_sigma2(
+  generateX = function(n) rcauchy(n, location = 0, scale = 1),
+  generateY = function(n, s2) rcauchy(n, location = 0, scale = s2),
+  sigma2 = sigma2_c
+)
+
+# Wykres
+power_plot(moc_norm_s, moc_log_s, moc_cauchy_s, x = "sigma2", xlab = expression(sigma[2]),
+  main_title = "Moce testów dla różnych σ w rozkładzie:")
+```
+
+**Komentarz:** Ponownie widzimy, że statystyki zachowują się mniej
+więcej zgodnie z założeniami z poprzedniego zadania, przy czym dla
+Cauchy'ego rosną najwolniej. Zwiększenie się różnicy w parametrach skali
+rozkładów najpoprawniej pokazują testy Ansariego–Bradley’a i Lepage’a,
+gorzej radzi sobie statystyka testowa Kołmogorowa–Smirnowa (dochodzi
+jedynie do 0.5), a różnicy przy zmianie parametru skali totalnie nie
+wykrywa tym razem Wilcoxon.
+
+## **Zadanie 4. Moc testu w przypadku zmian parametrów** $(\mu, \sigma)$
+
+Wygeneruj $m=n=20$ obserwacji z parametrami przesunięcia
+$\mu_1=0, \ \mu_2$ oraz skali $\sigma_1=1, \ \sigma_2$, gdzie parametry
+$(\mu_2, \sigma_2)$ to są zadane jednakowo jak w zadaniach 2 i 3. Oblicz wartość statystyki $W$, $AB$, $L$ i
+$KS$. Doświadczenie powtórz 10000 razy. Oszacuj wartość funkcji mocy
+analizowanych testów. Narysuj wyestymowane funkcje mocy w zależności od
+wektora parametrów $(\mu_2,\sigma_2)$.
+
+```{r}
+# Funkcja mocy (mu, sigma)
+moc_mu2_sigma2 <- function(generateX, generateY, mu2, sigma2) {
+  stopifnot(length(mu2) == length(sigma2))
+  do.call(rbind, lapply(seq_along(mu2), function(i) {
+    mui <- mu2[i]
+    si  <- sigma2[i]
+    res <- replicate(times, {
+      X <- generateX(m)
+      Y <- generateY(n, mui, si)
+      stat_all(X, Y) > crit
+    })
+    data.frame(mu2 = mui, sigma2 = si, test = rownames(res), moc = rowMeans(res))
+  }))
+}
+
+# Moce dla rozkladow
+moc_norm_ms <- moc_mu2_sigma2(
+  generateX = function(n) rnorm(n, 0, 1),
+  generateY = function(n, mu2, s2) rnorm(n, mu2, s2),
+  mu2 = mu2_ab,
+  sigma2 = sigma2_ab
+)
+moc_log_ms <- moc_mu2_sigma2(
+  generateX = function(n) rlogis(n, 0, 1),
+  generateY = function(n, mu2, s2) rlogis(n, mu2, s2),
+  mu2 = mu2_ab,
+  sigma2 = sigma2_ab
+)
+moc_cauchy_ms <- moc_mu2_sigma2(
+  generateX = function(n) rcauchy(n, 0, 1),
+  generateY = function(n, mu2, s2) rcauchy(n, mu2, s2),
+  mu2 = mu2_c,
+  sigma2 = sigma2_c
+)
+
+# Wykres
+power_plot_ms(moc_norm_ms, moc_log_ms, moc_cauchy_ms, "Moce testów dla różnych (μ, σ) w rozkładzie:")
+```
+
+**Komentarz:** Rozpatrujemy moc testów wzdłuż zadanej sekwencji par
+$(\mu_2,\sigma_2)$, w której jednocześnie rośnie przesunięcie i skala
+drugiego rozkładu. W związku z tym można sie spodziewać, że alternatywa
+będzie silniej wykrywana, co faktycznie widać na wykresach, bo tym razem
+wszystkie funkcje są rosnące i najsłabsza z funkcji nie radzi sobie tak
+słabo jak w poprzednich przypadkach. \newline Najwyższą moc uzyskuje
+statystyka Lepage’a $L$, co jest zgodne z teorią - jest ona sumą
+statystyk Wilcoxona $W$ (wrażliwej na zmiany parametru położenia $\mu$)
+oraz Ansariego–Bradley’a $AB$ (wrażliwej na zmiany skali $\sigma$). Przy
+jednoczesnych zmianach $(\mu_2,\sigma_2)$ szczególnie istotny okazuje
+się test $AB$, który radzi sobie bardzo dobrze w tym przypadku w
+przeciwieństwie do testu $W,$ który wyraźnie ma niższą moc (w symulacji
+nie przekracza ok. $0.3$). \newline Test Kołmogorowa–Smirnowa $KS$ daje
+wyniki pośrednie - jego moc rośnie wolniej niż dla $L$ i często także
+wolniej niż dla $AB$, ale pozostaje on względnie uniwersalny, ponieważ
+reaguje na różnice w całej dystrybuancie, a nie wyłącznie na położenie
+lub skalę.
+
+## **Zadanie 5. Empiryczne wartości krytyczne dla większej próby**
+
+Wygeneruj $m=n=50$ obserwacji z rozkładu $N(0,1)$. Na ich podstawie
+oblicz wartość statystyki $W$, $AB$, $L$ i $KS$. Doświadczenie powtórz
+10000 razy. Wyznacz wartości krytyczne analizowanych testów
+prawostronnych.
+
+```{r}
+# Symulacja
+sym5 <- replicate(times, {
+  X <- rnorm(m2)
+  Y <- rnorm(n2)
+  stat_all(X, Y)
+})
+
+# Wartości krytyczne
+crit_emp <- apply(sym5, 1, quantile, probs = 1 - alpha)
+crit_as  <- crit_asym(m2, n2, alpha)
+
+# Zestawienie
+tabela5 <- data.frame(
+  "Nazwa testu" = stat_names,
+  "Wartość empiryczna" = round(as.numeric(crit_emp), 3),
+  "Wartość asymptotyczna" = round(crit_as, 3),
+  "Różnica" = abs(round(as.numeric(crit_emp), 3) - round(crit_as, 3)),
+  check.names = FALSE
+)
+kable(tabela5, caption = "Porównanie wartości krytycznych empirycznych i asymptotycznych")
+```
+
+**Komentarz:** Zgodnie z założeniem o wpływie liczebności próby na
+dokładność, można zauważyć, że różnice w przypadku $n=m=50$ są mniejsze
+niż dla $n=m=20$ z zadania 1. Potwierdza to, że statystyki $W, \ AB$ i
+$L$ dążą asymptotycznie do rozkładu $\chi^2.$
+
+## **Zadanie 6 - Powtórzenie symulacji dla większej liczebności próby**
+
+Wygeneruj $m=n=50$ obserwacji z rozkładów normalnego, logistycznego i
+Cauchy'ego z parametrami przesunięcia $\mu_1$ i $\mu_2$ oraz skali
+$\sigma_1$ i $\sigma_2$. W każdym przypadku dobierz parametry $\mu_1$ i
+$\mu_2$ oraz skali $\sigma_1$ i $\sigma_2$ analogicznie jak w zadaniach
+2, 3, 4, tak aby uzyskać moce w pełnym zakresie, ale nie były one
+zdegenerowane. Sporządź wykresy funkcji mocy w zależności od $\mu_2$,
+$\sigma_2$ oraz $(\mu_2,\sigma_2)$ odpowiednio.
+
+```{r}
+# Parametry do zadania
+crit <- crit_emp
+
+# Funkcje mocy
+# mu
+moc_mu2 <- function(genX, genY, mu2){
+  do.call(rbind, lapply(mu2, function(mu2){
+    res <- replicate(times, {
+      X <- genX(m2)
+      Y <- genY(n2, mu2)
+      stat_all(X, Y) > crit
+    })
+    data.frame(mu2 = mu2, test = rownames(res), moc = rowMeans(res))
+  }))
+}
+
+# sigma
+moc_sigma2 <- function(genX, genY, sigma2){
+  do.call(rbind, lapply(sigma2, function(s2){
+    res <- replicate(times, {
+      X <- genX(m2)
+      Y <- genY(n2, s2)
+      stat_all(X, Y) > crit
+    })
+    data.frame(sigma2 = s2, test = rownames(res), moc = rowMeans(res))
+  }))
+}
+
+# mu i sigma
+moc_mu2_sigma2 <- function(genX, genY, mu2, sigma2){
+  do.call(rbind, lapply(seq_along(mu2), function(i){
+    res <- replicate(times, {
+      X <- genX(m2)
+      Y <- genY(n2, mu2[i], sigma2[i])
+      stat_all(X, Y) > crit
+    })
+    data.frame(mu2 = mu2[i], sigma2 = sigma2[i], test = rownames(res), moc = rowMeans(res))
+  }))
+}
+
+### Moce dla rozkladow
+# normalny
+moc_norm_m <- moc_mu2(
+  genX = function(n2) rnorm(n2, 0, 1),
+  genY = function(n2, mu2) rnorm(n2, mu2, 1),
+  mu2 = mu2_ab
+)
+moc_norm_s <- moc_sigma2(
+  genX = function(n2) rnorm(n2, 0, 1),
+  genY = function(n2, s2) rnorm(n2, 0, s2),
+  sigma2 = sigma2_ab
+)
+moc_norm_ms <- moc_mu2_sigma2(
+  genX = function(n2) rnorm(n2, 0, 1),
+  genY = function(n2, mu2, s2) rnorm(n2, mu2, s2),
+  mu2 = mu2_ab,
+  sigma2 = sigma2_ab
+)
+
+# logistyczny
+moc_log_m <- moc_mu2(
+  genX = function(n2) rlogis(n2, 0, 1),
+  genY = function(n2, mu2) rlogis(n2, mu2, 1),
+  mu2 = mu2_ab
+)
+moc_log_s <- moc_sigma2(
+  genX = function(n2) rlogis(n2, 0, 1),
+  genY = function(n2, s2) rlogis(n2, 0, s2),
+  sigma2 = sigma2_ab
+)
+moc_log_ms <- moc_mu2_sigma2(
+  genX = function(n2) rlogis(n2, 0, 1),
+  genY = function(n2, mu2, s2) rlogis(n2, mu2, s2),
+  mu2 = mu2_ab,
+  sigma2 = sigma2_ab
+)
+
+# Cauchy
+moc_cauchy_m <- moc_mu2(
+  genX = function(n2) rcauchy(n2, 0, 1),
+  genY = function(n2, mu2) rcauchy(n2, mu2, 1),
+  mu2 = mu2_c
+)
+moc_cauchy_s <- moc_sigma2(
+  genX = function(n2) rcauchy(n2, 0, 1),
+  genY = function(n2, s2) rcauchy(n2, 0, s2),
+  sigma2 = sigma2_c
+)
+moc_cauchy_ms <- moc_mu2_sigma2(
+  genX = function(n2) rcauchy(n2, 0, 1),
+  genY = function(n2, mu2, s2) rcauchy(n2, mu2, s2),
+  mu2 = mu2_c,
+  sigma2 = sigma2_c
+)
+
+### Wykresy
+# mu
+power_plot(moc_norm_m, moc_log_m, moc_cauchy_m, x = "mu2", xlab = expression(mu[2]), main_title = "Moce testów dla różnych μ przy m = n = 50 w rozkładzie:")
+# sigma
+power_plot(moc_norm_s, moc_log_s, moc_cauchy_s, x = "sigma2", xlab = expression(sigma[2]), main_title = "Moce testów dla różnych σ przy m = n = 50 w rozkładzie:")
+# (mu2, sigma2)
+power_plot_ms(moc_norm_ms, moc_log_ms, moc_cauchy_ms, "Moce testów dla różnych (μ, σ) przy m = n = 50 w rozkładzie:")
+```
+
+**Komentarz:** Choć funkcje mocy wyraźnie rosną szybciej, statystyki zachowują się analogicznie do zadania 2. Ponownie dla $\mu_2\approx0$ lub $\sigma_2=1$ moce testów są bliskie poziomowi istotności $\alpha=0.05$, co jest zgodne z definicją poziomu testu. Możemy więc podsumować obserwacje, że statystyki testowe:
+
+- **Wilcoxona** $W$ sprawdza się najlepiej w przypadku zmian parametru przesunięcia,
+- **Ansari-Bradley’a** $AB$ wykazuje wysoką skuteczność przy zmianach parametru skali, ale też w przypadku jednoczesnych zmian parametrów $(\mu,\sigma),$
+- **Lepage’a** $L$ charakteryzuje się wysoką mocą we wszystkich trzech analizowanych przypadkach, co wynika z faktu, że jest sumą asymptotycznie niezależnych statystyk $W$ i $AB$ oraz łączy ich zalety,
+- **Kołmogorowa–Smirnowa** przy większej liczebności próby również radzi sobie w każdym z trzech przypadków i cechuje się relatywnie stabilnym zachowaniem, co czyni go testem bardziej uniwersalnym w sytuacjach, gdy nie wiadomo, który z parametrów rozkładu ulega zmianie.

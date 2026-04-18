@@ -1,0 +1,489 @@
+---
+title: "Modele liniowe — Raport z listy 4"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+documentclass: article
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 3
+header-includes: 
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \captionsetup{labelfont=bf, font=small}
+toc-title: "Spis Treści"
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "cairo_pdf",
+  message = FALSE,
+  fig.width = 5.6, 
+  fig.height = 2.8,
+  fig.align = "center",
+  warning = FALSE)
+
+set.seed(6012026)
+library(ggplot2)
+library(kableExtra)
+library(knitr)
+library(MASS)
+```
+
+**Adnotacja:** Dla zapewnienia powtarzalności wyników ziarno losowe zostało ustawione na **6012026**.
+\clearpage
+
+## **Zadanie 1 - Teoria**
+### **Macierzowa postać równania regresji**
+Rozważmy równanie 
+$$Y_i = \beta_0 + \beta_1 X_{i1} + ... + \beta_{p-1} X_{i,p-1} + \varepsilon_i,$$ 
+które można również zapisać jako $Y = \mathbb{X} \beta + \varepsilon,$ gdzie: 
+
+- $Y = (Y_1, Y_2, ... Y_n)',$
+- $\beta = (\beta_0, \beta_1, ..., \beta_{p-1})',$
+- $\varepsilon = (\varepsilon_1, \varepsilon_2,..., \varepsilon_n)'$ oraz
+
+$$ \mathbb{X} = \left(\begin{array}{cccc}
+   1  & X_{1,1} &...& X_{1,p-1}\\
+    1 & X_{2,1} &...& X_{2,p-1}\\
+    ... & ...&...&...\\
+    1 & X_{n,1} & ... & X_{n,p-1}
+\end{array}\right)$$
+to macierz o wymiarach $n \times p.$
+
+### **Przedziały ufności**
+Przedziały ufności obliczymy ze wzoru $c' \hat \beta \pm t_{1 - \frac{\alpha}{2}, n-p} s(c' \hat \beta),$ gdzie:
+  
+- $\hat \beta = (\hat \beta_0, ..., \hat \beta_{p-1})'=(\mathbb{X'X})^{-1}\mathbb{X'}Y$,
+- $c \in \mathbb{R}^p$ to wektor służący do ułożenia kombinacji parametrów $\beta$,
+- $t_{1 - \frac{\alpha}{2},n-p}$ - kwantyl rzędu $1 - \frac{\alpha}{2}$ z rozkładu t-Studenta z $n-p$ stopniami swobody,
+  
+- $s(c' \hat \beta)$ to odchylenie standardowe, które obliczamy z $s^2(c' \hat \beta) = s^2 c' (\mathbb{X'X})^{-1} c.$
+Estymator wariancji błędów losowych $\sigma^2$ dany jest wzorem
+$$s^2=\frac{1}{n-p}||(\mathbb{I}-H)Y||_2^2=\frac{1}{n-p}||(\mathbb{I}-\mathbb{X(X'X)^{-1}X'}))Y||_2^2=\frac{1}{n-p}||e||_2^2=\frac{1}{n-p} \sum_{i=1}^ne_i^2.$$
+
+### **Testowanie wektora parametrów $\beta$**
+Chcemy testować istotność dowolnej kombinacji liniowej elementów wektora $\beta$, którego estymator $\hat\beta \sim N(\beta, \sigma^2\mathbb{(X'X)^{-1}})$
+
+Mamy wektor $c = (c_0, ..., c_{p-1})' \in \mathbb{R}^p$ oraz stałą $d \in \mathbb{R}$. Testować będziemy hipotezę
+$$H_0: c' \beta - d = 0 \quad \text{vs} \quad H_1: c' \beta - d \neq 0.$$
+Statystyka testowa ma postać: $$T = \frac{c' \hat \beta - d}{s \sqrt{c' (\mathbb{X'X})^{-1}c }}.$$
+
+Jeżeli $H_0$ jest prawdziwe, to statystyka T ma rozkład studenta z $n-p$ stopniami swobody. Zatem będziemy odrzucać $H_0$ na poziomie istotności $\alpha,$ gdy $|T| > t_{1 - \frac{\alpha}{2},n-p}$, gdzie $t_{1 - \frac{\alpha}{2},n-p}$ jest kwantylem z rozkładu t-Studenta lub gdy p-wartość będzie spełniała
+$$p=2(1-F_{t,n-p}(|T|))<\alpha,$$
+gdzie $F_{t,n-p}$ jest dystrybuantą rozkładu Studenta.
+
+## **Zadanie 1 - Wpływ korelacji**
+
+**a) Wygeneruj macierz $X_{100\times 2}$ taką, że jej wiersze są niezależnymi wektorami losowymi z wielowymiarowego rozkładu normalnego $N(0,\Sigma/100)$, gdzie**
+$$\Sigma=\begin{pmatrix}1 & 0.9 \\ 0.9 & 1\end{pmatrix}.$$
+**Następnie wygeneruj wektor zmiennej odpowiedzi postaci $Y=\beta_1X_1+\varepsilon$, gdzie $\beta_1=3$, $X_1$ to pierwsza kolumna $X$, a $\varepsilon \sim N(0,I_n)$.**
+
+```{r}
+# Parametry
+beta1 <- 3
+Sigma <- matrix(c(1, 0.9, 0.9, 1), nrow = 2)
+epsilon <- rnorm(n = 100, mean = 0, sd = 1)
+
+# Generowanie składników
+X <- mvrnorm(n = 100, mu = c(0, 0), Sigma = Sigma/100)
+Y <- beta1 * X[, 1] + epsilon
+```
+
+**Adnotacja:** Ponieważ generowana macierz pochodzi z wielowymiarowego rozkładu normalnego, korzystamy z funkcji mvrnorm() z biblioteki MASS.
+
+**b) Wyznacz 95% przedziały ufności dla wartości $\beta_1$ i przeprowadź t-test na poziomie istotności 0.05 dla hipotezy $\beta_1=0$ przy użyciu:**
+
+* modelu prostej regresji liniowej $Y=\beta_0+\beta_1X_1+\varepsilon$;
+* modelu z dwiema zmiennymi objaśniającymi $Y=\beta_0+\beta_1X_1+\beta_2X_2+\varepsilon$.
+
+
+**Komentarz:** Przeprowadzamy t-test na poziomie istotności $\alpha=0.05,$ żeby wyznaczyć 95% przedział ufności dla $\beta_1$ dla obu modeli, gdzie $X_i$ to i-te kolumny macierzy $\mathbb{X}.$
+
+```{r}
+# Funkcja do obu przypadków
+PU_beta1 <- function(X, Y, ilosc_zmiennych = 1, beta1_true = 3, var_true = 1, alpha = 0.05){
+  # Macierz X
+  if(ilosc_zmiennych == 1) X <- X[, 1]
+  X <- cbind(1, X)
+  if(det(t(X) %*% X) == 0) stop("Macierz X'X jest osobliwa")
+  
+  # Parametry
+  n <- dim(X)[1]
+  p <- dim(X)[2]
+  
+  # Rzeczy do zadania
+  H <- X %*% solve(t(X) %*% X) %*% t(X)
+  eps <- (diag(nrow = n) - H) %*% Y
+  
+  # Estymacja
+  beta_hat <- solve(t(X) %*% X) %*% t(X) %*% Y
+  s2 <- sum(eps^2) / (n - p)
+  c <- rep(0, p)
+  c[2] <- 1
+  d <- 0
+  
+  # Obliczanie testu t
+  s2_beta1 <- s2 * t(c) %*% solve(t(X) %*% X) %*% c
+  T_stat <- ( t(c) %*% beta_hat - d ) / sqrt(s2_beta1)
+  tc <- qt(1 - alpha/2, n - p)
+  PU_dol <- t(c) %*% beta_hat - tc*sqrt(s2_beta1)
+  PU_gora <-t(c) %*% beta_hat + tc*sqrt(s2_beta1)
+  
+  # Moc testu
+  s2_beta_true <- var_true * solve(t(X) %*% X) # macierz kowariancji
+  s2_beta1_true <- s2_beta_true[2,2] # Cov(b1, b1) = Var(b1)
+  delta <- beta1_true / sqrt(s2_beta1_true)
+  moc <- 1 - pt(tc, df = n-p, ncp = delta) + pt(-tc, df = n-p, ncp = delta)
+  
+  # Wyniki
+  tabela <- data.frame(
+    beta1_hat = beta_hat[2],
+    PU_dol = as.numeric(PU_dol),
+    PU_gora = as.numeric(PU_gora),
+    T_stat = T_stat,
+    tc = tc,
+    s2_beta1 = s2_beta1,
+    odr_H0 = if (abs(T_stat) > abs(tc)) 1 else 0,
+    s_beta1_true = sqrt(s2_beta1_true),
+    moc = moc,
+    row.names = NULL
+  )
+  return(tabela)
+}
+
+# Test z zadania
+PU1 <- round(PU_beta1(X, Y, ilosc_zmiennych = 1), 3)
+PU1$odr_H0 <- if (PU1$odr_H0) "TAK" else "NIE"
+PU2 <- round(PU_beta1(X, Y, ilosc_zmiennych = 2), 3)
+PU2$odr_H0 <- if (PU2$odr_H0) "TAK" else "NIE"
+```
+
+**95% przedział ufności** dla parametru $\beta_1$ dla **modelu prostej regresji liniowej**
+$$Y = \beta_0 + \beta_1 X_1 + \varepsilon$$ 
+jest postaci: [`r PU1$PU_dol`; `r PU1$PU_gora`]. Statystyka testowa T przyjmuje wartość `r PU1$T_stat`, a kwantyl rzędu 0.975 z `r dim(X)[1]-1` stopniami swobody ma wartość `r PU1$tc`. Widzimy, że $|T|>|t_c|,$ więc odrzucamy $H_0.$
+
+**95% przedział ufności** dla parametru $\beta_1$ w **modelu z dwiema zmiennymi objaśnianymi** 
+$$Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \varepsilon$$
+jest postaci: [`r PU2$PU_dol`; `r PU2$PU_gora`]. Statystyka testowa T tym razem wynosi `r PU2$T_stat`, a kwantyl rzędu 0.975 z `r dim(X)[1]-dim(X)[2]` stopniami swobody ma wartość `r PU2$tc`. Ponieważ $|T|<|t_c|$, więc nie odrzucamy $H_0$.
+Porównanie wyników prezentuje się następująco:
+
+Model             | $Y = \beta_0 + \beta_1 X_1 + \varepsilon$| $Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \varepsilon$
+----------------------|-----------------------------------|----------------------
+$\hat \beta_1$        | `r PU1$beta1_hat`                 | `r PU2$beta1_hat`
+95% PU                | [`r PU1$PU_dol`; `r PU1$PU_gora`] | [`r PU2$PU_dol`; `r PU2$PU_gora`]
+Długość przedziału    | `r PU1$PU_gora - PU1$PU_dol`      | `r PU2$PU_gora - PU2$PU_dol`
+Wartość statystyki T  | `r PU1$T_stat`                    | `r PU2$T_stat`
+Wartość kwantyla $t_c$| `r PU1$tc`                     | `r PU2$tc`
+Czy odrzucamy $H_0$?  | `r PU1$odr_H0`                    | `r PU2$odr_H0`
+
+Możemy zauważyć, że przedział ufności dla parametru $\beta_1$ w modelu z dwiema zmiennymi objaśniającymi ma większą długość niż w modelu z jedną zmienną objaśniającą. Oznacza to większą niepewność estymacji parametru $\beta_1$ w modelu z większą ilością zmiennych. Jednocześnie decyzja testowa dotycząca (nie) odrzucenia hipotezy $H_0: \ \beta_1 = 0$ może różnić się w zależności od przyjętego modelu i losowości próby. Sugeruje to, że uwzględnienie dodatkowej zmiennej objaśniającej wpływa na własności estymatora oraz testu statystycznego, ale niekoniecznie poprawiając precyzję estymacji.
+
+**c) Oblicz ręcznie odchylenie standardowe estymatora $\beta_1$ i moc testu (identyfikacji) $X_1$ w obu modelach.** 
+
+**Komentarz:** Ponieważ interesuje nas teoretyczna wartość odchylenia standardowego, we wzorze zamiast $s^2$ użyjemy znane nam $\sigma^2=1$. Wzór dla odchylenia standardowego wygląda teraz następująco: $s^2(c' \hat \beta) =c' (\mathbb{X'X} )^{-1} c,$ gdzie wektor $c'$ to $c' = (0,1)$ w przypadku pierwszego modelu i $c' = (0, 1, 0)$ - drugiego.
+
+Moc testu $\beta_1$ to prawdopodobieństwo odrzucenia $H_0:\beta_1 = 0$ wiedząc, że prawdziwa jest hipoteza alternatywna $H_1: \beta_1 = 3$.
+
+Korzystamy ze statystyki testowej T oraz wektora $c$ takiego, że $c' \hat \beta = \hat \beta_1$. Przy założeniu, że $\beta_1=3$, statystyka T ma niecentralny rozkład studenta z parametrem niecentralności $\delta = \frac{\beta_1}{\sigma(\hat \beta_1)},$ gdzie $\sigma(\hat \beta_1)$ obliczamy biorąc 2 wiersz 2 drugiej kolumny z macierzy kowariancji danej wzorem:
+$$Var(\hat \beta) = \sigma^2 \mathbb{(X'X)^{-1}}$$
+
+Moc testu to $P_{\beta_1 = 3}(|T| > |t_{1-\alpha/2,n-p}|)$, gdzie $t$ to odpowiedni kwantyl rozkładu Studenta.
+
+```{r}
+tabc <- data.frame(
+  "Prosta regresja" = c(PU1$s_beta1_true, PU1$moc),
+  "Dwie zmienne" = c(PU2$s_beta1_true, PU2$moc),
+  row.names = c("Odchylenie", "Moc testu"),
+  check.names = FALSE
+)
+kable(tabc, caption = "Odchylenie standardowe i moc dla dwóch modeli")
+```
+
+Model z dwoma zmiennymi objaśniającymi ma większe odchylenie standardowe estymatora $\beta_1,$ co zgodne jest z wnioskiem z poprzedniego podpunktu mówiącym, że przedział ufności dla $\beta_1$ jest większy dla tego modelu. Moc testu dla modelu z jedną zmienną jest wysoka i wynosi `r round(PU1$moc, 3)`, podczas gdy dla drugiego modelu jest o wiele mniejsza i wynosi tylko `r round(PU2$moc,3)`. Może to wynikać z faktu, że zmienne $X_1$ i $X_2$ są skorelowane, co z kolei sprawia, że możemy podejrzewać iż da się przybliżyć model $Y = \beta_0 + \beta_1 X_1 + \varepsilon$ zastępując $X_1$ zmienną $X_2$ oraz zmieniając wartości parametrów $\beta_0$ i $\beta_1.$
+
+**d) Wygeneruj 1000 niezależnych kopii wektora błędów losowych $\varepsilon$ i 1000 odpowiednich kopii wektora zmiennej odpowiedzi. Dla każdego z tak wygenerowanych zbiorów danych wyznacz estymator $\beta_1$ i wykonaj test istotności dla $\beta_1$ w obu modelach (z jedną i dwoma zmiennymi objaśniającymi). Wyestymuj odchylenie standardowe $\beta_1$ oraz moc testu i porównaj te wartości z teoretycznymi wynikami uzyskanymi w punkcie c).**
+
+**Teoria:** Empiryczną moc testu estymujemy jako częstość odrzuceń hipotezy zerowej w symulacjach, tzn. liczba odrzuceń $H_0$ podzielona przez liczbę prób. Analogicznie empiryczne odchylenie standardowe estymatora $\hat\beta_1$ będziemy estymować poprzez wyznaczenie odchylenia standardowe z próby złożonej z 1000 wartości estymatora otrzymanego w kolejnych symulacjach.
+
+```{r}
+# Parametry do zadania
+n <- 100 # z podpunktu a
+p <- 1000
+beta1 <- 3
+alpha <- 0.05
+
+# Generujemy puste obiekty do uzupełnienia
+beta1_1 <- numeric(p)
+beta1_2 <- numeric(p)
+odr_H0_1 <- numeric(p)
+odr_H0_2 <- numeric(p)
+
+# Uzupełnianie wyników
+for(i in 1:p){
+  eps <- rnorm(n, 0, 1)
+  Y <- beta1 * X[,1] + eps
+  
+  # Model z jedną zmienną
+  tab1 <- PU_beta1(X, Y, ilosc_zmiennych = 1, beta1_true = beta1)
+  beta1_1[i] <- tab1$beta1_hat
+  odr_H0_1[i] <- tab1$odr_H0
+  
+  # Model z dwiema zmiennymi
+  tab2 <- PU_beta1(X, Y, ilosc_zmiennych = 2, beta1_true = beta1)
+  beta1_2[i] <- tab2$beta1_hat
+  odr_H0_2[i] <- tab2$odr_H0
+}
+
+# Dane do data frame
+s_1 <- round(sd(beta1_1), 3)
+s_2 <- round(sd(beta1_2), 3)
+moc_1 <- round(mean(odr_H0_1), 3)
+moc_2 <- round(mean(odr_H0_2), 3)
+
+# Wyniki
+tabd <- data.frame(
+  "Prosta regresja" = c(s_1, moc_1),
+  "Dwie zmienne" = c(s_2, moc_2),
+  row.names = c("Empiryczne odchylenie", "Empiryczna moc testu"),
+  check.names = FALSE
+)
+tabcd <- rbind(tabc, tabd)
+kable(t(tabcd), caption = "Odchylenie standardowe i moc dla dwóch modeli")
+```
+
+**Komentarz:** Dla obu modeli możemy wyciągnąć wniosek, że estymowane wartości dobrze przybliżają wartości teoretyczne dla dużej liczby powtórzeń.
+
+## **Zadanie 2 - Teoria**
+### **Kryterium informacyjne Akaike (AIC)**
+Najlepszym modelem według kryterium AIC jest taki, który wyjaśnia możliwie największą część zmienności danych przy użyciu jak najmniejszej liczby zmiennych objaśniających, czyli w skrócie taki, który posiada najniższą wartość AIC. Kryterium AIC obliczamy ze wzoru:
+$$AIC = n \log \left(\frac{SSE}{n} \right) + 2k,$$
+gdzie:
+
+- $SSE = \sum_{i=1}^{n}(Y_i - \hat Y_i)^2$,
+- $k$ oznacza liczbę estymowanych parametrów modelu (w tym wyraz wolny),
+- $n$ to wymiar zmiennej Y, czyli liczba obserwacji.
+
+## **Zadanie 2 - Wpływ wymiaru**
+
+**a) Wygeneruj macierz planu $X_{1000\times 950}$ tak, że jej elementy są niezależnymi zmiennymi losowymi z rozkładu normalnego $N(0,\sigma=0.1)$. Następnie wygeneruj wektor zmiennej odpowiedzi według modelu**
+$$Y=X\beta+\varepsilon,$$
+**gdzie $\beta=(3,3,3,3,3,0,\ldots,0)^T$.**
+
+**Adnotacja:** Z racji, że nie jest podany rozklad residuów, przyjmuje standardowe $\varepsilon \sim N(0,I).$
+
+```{r}
+# Parametry
+n <- 1000
+p <- 950
+sd <- 0.1
+
+# Macierze i wektory
+X  <- matrix(rnorm(1000*950, mean = 0, sd = 0.1), nrow = n, ncol = p)
+beta <- c(rep(3, times = 5), rep(0, times = p - 5))
+eps <- rnorm(n, mean = 0, sd = 1)
+Y <- X %*% beta + eps
+```
+
+**b) Wyestymuj wartości współczynników regresji i wykonaj t-testy na poziomie istotności $0.05$, aby zidentyfikować istotne regresory, jeżeli model jest zbudowany przy użyciu pierwszych $k$ kolumn macierzy planu dla $k \in {1,2,5,10,50,100,500,950}$. Dla każdego z tych modeli należy podać:**
+
+* sumę kwadratów residuów $SSE=||Y-\hat Y||^2$;
+* błąd średniokwadratowy estymatora wartości oczekiwanej $Y: MSE=||X(\hat\beta-\beta)||^2$;
+* wartość kryterium AIC: $AIC=n\log(SSE/n)+2k$;
+* p-wartości dla dwóch pierwszych zmiennych objaśniających;
+* liczbę fałszywych odkryć.
+
+**Który model należy wybrać na podstawie AIC?)**
+
+```{r}
+# Parametry
+kvals <- c(1,2,5,10,50,100,500,950)
+
+# Macierze i wektory
+podsumowanie <- function(k, X = X, Y = Y, podpunkt = c("b", "c"), alpha = 0.05) {
+  # Przygotowanie danych
+  podpunkt <- match.arg(podpunkt)
+  n <- length(Y)
+  p <- ncol(X)
+  
+  # Indeksy w wektorze beta, gdzie ustawimy 3
+  if (podpunkt == "b"){
+    idx <- 1:k
+  } else {
+    # estymacja i miejsce w wektorze
+    beta_hat <- solve(t(X) %*% X) %*% t(X) %*% Y
+    idx <- order(abs(beta_hat), decreasing = TRUE)[1:k]
+  }
+  
+  # Wybor kolumn
+  Xk <- X[, idx, drop = FALSE]
+  
+  # Estymacja MNK
+  beta_hat <- solve(t(Xk) %*% Xk) %*% t(Xk) %*% Y
+  Y_hat <- Xk %*% beta_hat
+  
+  # SSE
+  SSE <- sum((Y - Y_hat)^2)
+  
+  # MSE
+  beta_pelny <- c(rep(3, times = 5), rep(0, times = p - 5))
+  beta_hat_pelny <- numeric(p)
+  beta_hat_pelny[idx] <- beta_hat
+  MSE <- sum((X %*% (beta_hat_pelny - beta_pelny))^2)
+  
+  # AIC
+  AIC <- n * log(SSE / n) + 2 * k
+  
+  # p-wartości
+  s2_beta <- (SSE / (n - k)) * solve(t(Xk) %*% Xk)
+  se <- sqrt(diag(s2_beta))
+  tstat <- beta_hat / se
+  pvals <- 2 * pt(abs(tstat), df = n - k, lower.tail = FALSE)
+  p_1 <- if (1 %in% idx) pvals[which(idx == 1)] else NA
+  p_2 <- if (2 %in% idx) pvals[which(idx == 2)] else NA
+  
+  # Fałszywe odkrycia
+  beta_check <- ifelse(idx <= 5, 3, 0)
+  FO <- sum(pvals[beta_check == 0] < alpha) # blad I rodzaju
+  
+  data.frame(
+      k = k,
+      SSE = SSE,
+      MSE = MSE,
+      AIC = AIC,
+      idX1 = p_1,
+      idX2 = p_2,
+      FO = FO,
+      row.names = NULL,
+      check.names = FALSE
+    )
+}
+tab2b <- lapply(kvals, function(k) podsumowanie(k = k, X = X, Y = Y, podpunkt = "b"))
+tab2b <- do.call(rbind, tab2b)
+kable(round(tab2b, 3), caption = "Podsumowanie modeli dla różnej ilości kolumn")
+```
+
+**Komentarz:** Wraz ze wzrostem liczby zmiennych $k$ wartości SSE systematycznie maleją, natomiast wartości MSE dla $k \geq 5$ wykazują tendencję rosnącą. Szczególnie wyraźną poprawną dopasowania obserwujemy już w przejściu z $k=2$ do $k=5,$ gdzie jednocześnie gwałtownie maleją wartości SSE, MSE oraz AIC. P-wartości dla pierwszych dwóch zmiennych objaśniających (kolumny idX1, idX2) są małe niezależnie od $k,$ co sugeruje ich istotność statystyczną. Liczba fałszywych odkryć pozostaje równa 0 dla małych modeli i zaczyna rosnąć od $k=50.$
+
+Zgodnie z kryterium AIC najlepszy jest model o największej liczbie zmiennych, dla którego wartość AIC jest minimalna. Należy jednak zauważyć, że wraz ze wzrostem $k$ rośnie liczba błędów I rodzaju, co sugeruje, że wraz ze wzrostem liczby zmiennych rośnie prawdopodobieństwo identyfikacji regresorów nieistotnych. Pomimo, że kryterium AIC sugeruje wybranie modelu z $k=950,$ to z analizy pozostałych własności, możemy podejrzewać, że model z $k=5$ najwierniej odtwarza strukturę danych z próby.
+
+**c) (+1 pkt) Powtórz punkt b), gdy modele są konstruowane przy pomocy zmiennych o największych (niekoniecznie pierwszych) estymowanych współczynnikach regresji. Porównaj wartości obliczonych statystyk z otrzymanymi w punkcie b). Który model należy wybrać na podstawie AIC?** 
+
+```{r}
+tab2c <- lapply(kvals, function(k) podsumowanie(k = k, X = X, Y = Y, podpunkt = "c"))
+tab2c <- do.call(rbind, tab2c)
+kable(round(tab2c, 3), caption = "Podsumowanie modeli dla różnej ilości kolumn z beta dobranym z modeli")
+```
+
+**Komentarz:** W podpunkcie c) dla małych wartości $k$ pierwsze zmienne objaśniające nie należą do zbioru regresorów o największych estymowanych współczynnikach w tym przypadku, dlatego ich p-wartości nie są w zbiorze, przez co otrzymujemy NA zamiast 0 dla $k \leq 10$. Wiele wniosków jest analogicznych do tych uzyskanych w podpunkcie b).
+
+Największą liczbę fałszywych odkryć obserwujemy dla $k=500,$ co sugeruje, że mimo iż zgodnie z kryterium AIC ponownie należałoby wybrać model z największą liczbą parametrów, natomiast dla $k=100$ można spodziewać się istotnego pogorszenia własności modelu. Z analizy tabeli wynika, że w tym przypadku $k=50$ zapewnia najkorzystniejszy kompromis pomiędzy dopasowaniem modelu (niskie wartości MSE i AIC) a liczbą fałszywych odkryć, przy jednoczesnym istnieniu p-wartości dla zmiennych $X_1$ oraz $X_2.$
+
+**d) Powtórz generowanie $\varepsilon$ i $Y$ oraz punkty b) i c) (jeśli zostało zrobione) 1000 razy. Dla każdego z zadań oblicz moc identyfikacji $X_1$, $X_2$ i średnią liczbę fałszywych odkryć. Dodatkowo oszacuj średni rozmiar modelu wybranego przez AIC dla punktów b) i c) (jeśli zostało zrobione).**
+
+\clearpage
+
+```{r}
+# Parametry
+times <- 1000
+beta <- c(rep(3, times = 5), rep(0, times = p - 5))
+
+# Generujemy Y
+eps <- mvrnorm(n = times, mu = rep(0, n), Sigma = diag(n))
+Y <- drop(X %*% beta) + t(eps)
+
+# Funkcja
+podsumowanie_d <- function(Y, k, czy_c = FALSE, alpha = 0.05) {
+  ny <- length(Y)
+  px <- ncol(X)
+  bhat <- solve(t(X) %*% X) %*% t(X) %*% Y
+  idx_ord <- if (!czy_c) 1:px else order(abs(bhat), decreasing = TRUE)
+  
+  # Obliczenia po wybraniu podpunktu
+  idx <- idx_ord[1:k]
+  Xk  <- X[, idx, drop = FALSE]
+  H <- Xk %*% solve(t(Xk) %*% Xk) %*% t(Xk)
+  eps_f <- (diag(ny) - H) %*% Y
+  beta_hat_k <- solve(t(Xk) %*% Xk) %*% t(Xk) %*% Y
+
+  se <- sqrt(diag(sum(eps_f^2) * solve(t(Xk) %*% Xk) / (ny - k)))
+  tstat <- beta_hat_k / se
+  pvals <- 2 * pt(abs(tstat), df = ny - k, lower.tail = FALSE)
+  beta_true <- beta[idx]
+  SSE <- sum(eps_f^2)
+  
+  # MSE
+  beta_hat_pelny <- numeric(px)
+  beta_hat_pelny[idx] <- beta_hat_k
+  MSE <- sum((X %*% (beta_hat_pelny - beta))^2)
+
+  c(SSE = SSE,
+    MSE = MSE,
+    AIC = ny * log(SSE / ny) + 2 * k,
+    FO  = sum(pvals[beta_true == 0] < alpha),
+    idX1= as.integer((1 %in% idx) && pvals[which(idx == 1)] < alpha),
+    idX2= as.integer((2 %in% idx) && pvals[which(idx == 2)] < alpha))
+}
+
+##### Podpunkty
+### Podpunkt b
+wyniki_b <- lapply(kvals, function(k) {
+  sapply(seq_len(times), function(i) podsumowanie_d(Y[, i], k, czy_c = FALSE))
+})
+names(wyniki_b) <- kvals
+# Tabela 1
+srednie_b <- lapply(wyniki_b, rowMeans)
+AIC_mat_b <- sapply(wyniki_b, function(M) M["AIC", ])
+
+# AIC
+wybrane_k_b <- apply(AIC_mat_b, 1, function(v) kvals[which.min(v)])
+sredni_rozmiar_AIC_b <- round(mean(wybrane_k_b), 3)
+
+### Podpunkt c analogicznie
+wyniki_c <- lapply(kvals, function(k) {
+  sapply(seq_len(times), function(i) podsumowanie_d(Y[, i], k, czy_c = TRUE))
+})
+names(wyniki_c) <- kvals
+# Tabela 1
+srednie_c <- lapply(wyniki_c, rowMeans)
+AIC_mat_c <- sapply(wyniki_c, function(M) M["AIC", ])
+# AIC
+wybrane_k_c <- apply(AIC_mat_c, 1, function(v) kvals[which.min(v)])
+sredni_rozmiar_AIC_c <- round(mean(wybrane_k_c), 3)
+
+### Konstrukcja df
+tab_b <- do.call(rbind, lapply(names(srednie_b), function(k) {
+  cbind(k = as.integer(k), t(srednie_b[[k]][c("SSE", "MSE", "AIC", "idX1", "idX2", "FO")]))
+}))
+tab_b <- as.data.frame(tab_b)
+rownames(tab_b) <- NULL
+
+tab_c <- do.call(rbind, lapply(names(srednie_c), function(k) {
+  cbind(k = as.integer(k), t(srednie_c[[k]][c("SSE", "MSE", "AIC", "idX1", "idX2", "FO")]))
+}))
+tab_c <- as.data.frame(tab_c)
+rownames(tab_c) <- NULL
+
+# Tabele
+kable(round(tab_b, 3), caption = "Zad.2d – Wyniki symulacji dla podpunktu b")
+```
+
+**Komentarz:** Analogicznie jak w podpunkcie b), wraz ze wzrostem liczby zmiennych $k$ wartości SSE maleją, natomiast wartości MSE rosną dla większych modeli. Ponownie najlepsze własności modelu obserwujemy dla $k=5$, gdzie MSE i AIC przyjmują jedne z najmniejszych wartości, a liczba fałszywych odkryć jest równa zero. Dla małych i średnich wartości $k$ moc identyfikacji zmiennych $X_1$ i $X_2$ jest bliska 1. Wraz ze wzrostem $k$ liczba fałszywych odkryć rośnie, co jest szczególnie widoczne dla $k \geq 50.$ Dla modelu z największą ilością zmiennych $k=950$ można zauważyć spadek mocy identyfikacji oraz dużą liczbę fałszywych odkryć.
+
+```{r}
+kable(round(tab_c, 3), caption = "Zad.2d – Wyniki symulacji dla podpunktu c")
+```
+
+Dla małych wartości $k$ model ponownie charakteryzuje się niewielką mocą identyfikacji zmiennych $X_1$ i $X_2,$ co wynika z selekcji regresorów na podstawie największych estymowanych współczynników. Wraz ze wzrostem $k$ moc identyfikacji rośnie, osiągając wysokie wartości dla $k \geq 100.$ Jednocześnie obserwujemy wzrost liczby fałszywych odkryć, szczególnie dla dużych modeli. Zgodnie z kryterium AIC należałoby wybrać model o dużej liczbie zmiennych, jednak analiza pozostałych własności wskazuje na istotne pogorszenie się własności modelu przy dużych $k$. Najkorzystniejsze własności modelu obserwujemy dla $k$ pomiędzy 10 i 50.
+
+Średni rozmiar modelu wybranego przez kryterium AIC wynosi odpowiednio dla podpunktu b) `r sredni_rozmiar_AIC_b` oraz dla podpunktu c) `r sredni_rozmiar_AIC_c`.

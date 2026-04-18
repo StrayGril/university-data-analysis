@@ -1,0 +1,540 @@
+---
+title: "Modele liniowe — Raport z listy 2"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: true
+header-includes: 
+  - \renewcommand{\contentsname}{Spis Treści}
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \captionsetup{labelfont=bf, font=small}
+  - \setcounter{section}{2}
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, 
+  eval = TRUE, 
+  dev = "pdf", 
+  message = FALSE, 
+  fig.align = "center", 
+  out.width='50%', 
+  warning = FALSE)
+set.seed(13112025)
+```
+
+**Adnotacja:** Dla zapewnienia powtarzalności wyników ziarno losowe zostało ustawione na 13112025.
+
+\clearpage
+
+## **Zadanie 1**
+**Przedstaw dane na wykresie. Czy zależność jest w przybliżeniu liniowa?**
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- as.data.frame(read.table("data/CH01PR20.txt", header = FALSE))
+X <- data[, 2] # liczba / ilosc
+Y <- data[, 1] # czas
+plot(X, Y,
+     pch = 19,
+     xlab = "Liczba kopiarek",
+     ylab = "Czas (godziny)",
+     main = "Regresja liniowa: czas ~ liczba kopiarek")
+```
+
+**Odpowiedź:** Tak, na wykresie wyraźnie widać, że zależność między czasem potrzebnym na utrzymanie sprzętu a kopiarkami jest w przybliżeniu liniowa, bo punkty układają się rosnąco i nie ma wyraźnych odchyleń.
+
+## **Zadanie 2**
+**Wyznacz regresję liniową z $y =$ czas obsługi i $x =$ liczba obsługiwanych maszyn. Give the estimated regression equation. Oblicz nachylenie (slope) i wyraz wolny (intercept) za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R. Do wykresu dodaj prostą regresji liniowej.**
+
+**Odpowiedź:** Wychodzimy od wzoru teoretycznego na estymowaną prostą regresji $\hat Y_i = \hat \beta_0 + \hat \beta_1 X_i$, gdzie $\hat \beta_1$ to nachylenie (slope), a $\hat \beta_0$ to wyraz wolny (intercept). Współczynniki obliczamy ze wzorów:
+$$\hat \beta_1 = \frac{\sum_{i=1}^{n} (X_i - \bar X)(Y_i - \bar Y)}{\sum_{i=1}^{n} (X_i - \bar X)^2}, \ \ \hat \beta_0 = \bar Y - \hat \beta_1 \bar X$$
+
+```{r}
+# lm(y ~ x)
+reg <- lm(Y ~ X, data = data)
+Beta0 <- reg$coefficients[1]
+Beta1 <- reg$coefficients[2]
+
+# Obliczenia teoretyczne
+beta_fun <- function(x, y) {
+  Beta1 <- sum((x - mean(x)) * (y - mean(y))) / sum((x - mean(x))^2)
+  Beta0 <- mean(y) - Beta1 * mean(x)
+  
+  return(list(
+    Beta0 = Beta0,
+    Beta1 = Beta1
+  ))
+}
+b0 <- beta_fun(X, Y)$Beta0
+b1 <- beta_fun(X, Y)$Beta1
+
+# Tabela do porownania
+table <- data.frame(
+  "Wartość z R" = c(Beta0, Beta1),
+  "Wartość teoretyczna" = c(b0, b1),
+  check.names = FALSE,
+  row.names = c("Wyraz wolny", "Nachylenie")
+)
+```
+
+```{r}
+knitr::kable(table, digits = 4, caption = "Porównanie wartości współczynników β₀ i β₁")
+```
+
+Równość wyników potwierdza poprawność implementacji wzorów teoretycznych w R. Na ich podstawie wiemy, że estymowane równanie regresji ma wzór $\hat Y_i \approx -0.58 + 15.04 X_i$. Nałożona na wykres prosta regresji liniowej potwierdza, że zależność jest w przybliżeniu liniowa.
+
+```{r}
+# Dodanie prostej regresji do wykresu
+plot(X, Y,
+     pch = 19,
+     xlab = "Liczba kopiarek",
+     ylab = "Czas (godziny)",
+     main = "Regresja liniowa: czas ~ liczba kopiarek")
+abline(reg, col = "red", lwd = 2)
+```
+
+## **Zadanie 3**
+**Wyznacz 95% przedział ufności dla nachylenia (slope) i wyrazu wolnego (intercept) za pomocą wzorów teoretycznych i poleceń wbudowanych w R.**
+
+**Odpowiedź:** Korzystamy ze wzoru na przedziały ufności 
+$$\hat \beta_i \pm t_c s(\hat \beta_i)$$ 
+z parametrem $t_c = t_{1- \frac{\alpha}{2}, n-2} = t_{0.975, 43},$ będącym kwantylem rzędu $1- \frac{\alpha}{2}$ z rozkładu studenta z $n-2$ stopniami swobody.
+
+Kwadraty estymatorów błędu standardowego $s(\hat \beta_i)$ obliczamy odpowiednio dla nachylenia i intercepta według wzorów:
+$$s^2(\hat \beta_1) = \frac{s^2}{\sum_{i = 1}^{n} (X_i - \bar X)^2} \quad \text{i} \quad s^2(\hat \beta_0) = s^2(\frac{1}{n}+ \frac{\bar X^2}{\sum_{i=1}^{n}(X_i - \bar X)^2}).$$
+
+```{r}
+# Parametry
+n <- length(Y)
+X_mean <- mean(X)
+Y_mean <- mean(Y)
+# Beta0, Beta1 już mamy
+
+# Estymacja wariancji
+s2 <- sum((Y - (Beta0 + Beta1 * X))^2) / (n - 2) # z wykładu
+s <- sqrt(s2)
+
+# Odchylenia standardowe estymatorów ze wzorow z wykladu
+sBeta1 <- s / sqrt(sum((X - X_mean)^2))
+sBeta0 <- s * sqrt(1/n + (X_mean^2 / sum((X - X_mean)^2)))
+
+# Poziom ufności 95%
+alpha <- 1 - 0.95 # alfa = 1 - poz. ufnosci
+t_crit <- qt(1 - alpha/2, df = n - 2)
+
+# Przedziały ufności teoretyczne
+PU_Beta1 <- c(Beta1 - t_crit * sBeta1, Beta1 + t_crit * sBeta1)
+PU_Beta0 <- c(Beta0 - t_crit * sBeta0, Beta0 + t_crit * sBeta0)
+
+# Polecenia wbudowane w R
+PU_R <- confint(reg, level = 0.95)
+
+# Tabela
+PU_table <- data.frame(
+  Parametr = c("B0 (teoria)", "B0 (R)", "B1 (teoria)", "B1 (R)"),
+  Początek = round(c(PU_Beta0[1], PU_R[1, 1], PU_Beta1[1], PU_R[2, 1]), 3),
+  Koniec   = round(c(PU_Beta0[2], PU_R[1, 2], PU_Beta1[2], PU_R[2, 2]), 3))
+```
+
+```{r}
+knitr::kable(t(PU_table), digits = 4,
+  caption = "Porównanie 95% przedziałów ufności dla współczynników β₀ i β₁")
+```
+
+Przedział dla $\beta_1$ jest węższy niż dla $\beta_0,$ bo intercept ma dodatkowy składnik $\frac{1}{n}$ oraz średnią $\bar X$ w liczniku. Również dla porównania, wartości parametrów to $\beta_0 \approx -0.58\quad \text{i} \quad \beta_1 \approx 15.04$. Jak łatwo zauważyć - należą one do przedziałów ufności, które bez względu na metodę obliczania są praktycznie identyczne.
+
+## **Zadanie 4**
+**Przedstaw wyniki testu istotności slope'a i intersepta. Podaj testowane hipotezy, statystyki testowe z liczbą stopni swobody, p-wartości i własne wnioski. Oblicz statystyki testowe oraz p-wartości za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R.**
+
+**Część teoretyczna:**
+
+**Testowane hipotezy** to $H_0: \beta_i = 0 \quad \text{vs} \quad H_1: \beta_i \neq 0 \quad \text{dla} \ i = 0,1$.
+
+**Statystyka testowa** ma postać:
+$$t = \frac{\hat \beta_i - \beta_i}{s(\hat \beta_i)} = \frac{\hat \beta_i}{s(\hat \beta_i)},$$
+gdzie przyjmujemy $\beta_i = 0$, ponieważ w $H_0$ zakładamy, że dana zmienna **nie ma wpływu** na zmienną zależną.
+
+**Wartość p** obliczamy z:
+
+$p=P(|z| > |T|) = 2 \cdot (1 - F_{t_{n-2}}(|t|)),$ gdzie $F_{t_{n-2}}$ to dystrybuanta rozkładu Studenta o $n−2$ stopniach swobody.
+
+```{r}
+# Statystyki
+t_b0 <- Beta0 / sBeta0 # dla interceptu
+t_b1 <- Beta1 / sBeta1 # dla slope'a
+
+# p-wartosci
+p_b0 <- 2 * (1 - pt(abs(t_b0), n-2)) # pt(t, df) to wartosc dystrybuanty dla statystyki t i df = n-2 z zadania
+p_b1 <- 2 * (1 - pt(abs(t_b1), n-2))
+
+# Tabela
+testy_table <- data.frame(
+  Parametr = c("Intercept", "Nachylenie"),
+  "t (teoria)" = c(t_b0, t_b1),
+  "p (teoria)" = c(p_b0, p_b1),
+  "t (R)" = summary(reg)$coefficients[, "t value"],
+  "p (R)" = summary(reg)$coefficients[, "Pr(>|t|)"],
+  "Istotny na poziomie 0.05" = c(ifelse(p_b0 < alpha, "Tak", "Nie"),
+    ifelse(p_b1 < alpha, "Tak", "Nie")),
+  check.names = FALSE,
+  row.names = NULL
+)
+```
+
+```{r}
+knitr::kable(testy_table, digits = 3,
+  caption = "Porównanie wyników testu istotności dla β₀ i β₁")
+```
+**Komentarz:** Obie metody dają w przybliżeniu równe wyniki. Na podstawie p-wartości $< 0.05$ odrzucamy hipotezę zerową dla $\beta_1$, co oznacza, że liczba kopiarek istotnie wpływa na czas obsługi. Natomiast dla $\beta_0$ p-wartość $>0.05$, dlatego nie ma podstaw do odrzucenia hipotezy zerowej — wyraz wolny nie jest statystycznie istotny. Oznacza to, że w modelu najważniejszy jest parametr $\beta_1$, który opisuje zależność Y od X, podczas gdy intercept jest nie aż tak istotny.
+
+## **Zadanie 5**
+**Podaj estymator wartości oczekiwanej czasu obsługi, której można oczekiwać, gdyby serwisowanych było $k$ maszyn, oraz 95% przedział ufności dla tej wartości, $k \in \{1,5,8,11,25,100\}$. Oblicz przedział ufności za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R. Jak długość przedziału ufności zależy od miejsca punktu względem danych?**
+
+**Część teoretyczna:**
+
+**Estymator** to  $\widehat{E}(Y\mid X=k)= \hat y =\hat\beta_0+\hat\beta_1 k,$ a **przedział ufności** dla średniej obliczamy z: 
+$$\hat y \pm t_{0.975,n-2} \cdot s\sqrt{\frac{1}{n}+\frac{(k-\bar X)^2}{\sum_{i=1}^n(X_i-\bar X)^2}}$$
+
+```{r}
+# Punkty k
+k <- c(1, 5, 8, 11, 25, 100)
+
+# Funkcja do zadan 5-6
+PU_fun <- function(k, regression = reg, predykcja = FALSE) {
+  # Liczba kopiarek (X)
+  x <- regression$model[[2]]
+  
+  # Suma kwadratów odchyleń i sigma s
+  SSx <- sum( (x-mean(x))^2 ) 
+  s <- summary(regression)$sigma
+  
+  ## Estymator E(Y|X=k)
+  y_hat <- coef(regression)[1] + coef(regression)[2]*k
+  
+  # Obliczanie odchylenia standardowego dla średniej lub predykcji
+  if(predykcja) SEx <- s*sqrt(1 + 1/length(x) + (k - mean(x) )^2 / SSx)
+  else SEx <- s*sqrt(1/length(x) + (k - mean(x) )^2 / SSx)
+  
+  # Obliczone  z R
+  type_R <- ifelse(predykcja, "prediction", "confidence")
+  PU_R <- predict(regression,
+                  newdata = data.frame(X = k),
+                  interval = type_R,
+                  level = 0.95)
+  
+  t_kwantyl <- qt(0.975,regression$df.residual) # Kwantyl t-Studenta
+  data.frame(
+    k = k,
+    y_hat = y_hat,
+    dolna_teoria = y_hat - t_kwantyl * SEx,
+    gorna_teoria = y_hat + t_kwantyl * SEx,
+    dolna_R = PU_R[, "lwr"],
+    gorna_R = PU_R[, "upr"]
+  )
+}
+
+# Obliczamy od razu dla wszystkich i tworzymy tabele
+PU5_table <- PU_fun(k, reg, predykcja = FALSE)
+```
+
+```{r}
+knitr::kable(PU5_table, digits = 2,
+caption = "95% przedziały ufności dla E[Y | X=k]")
+```
+
+**Komentarz:** Długość przedziału ufności jest najmniejsza w pobliżu średniej liczby kopiarek $\bar X \approx 5.1$ i rośnie, im dalej punkt $k$ leży od centrum danych. Wynika to z obecności $(k - \bar X)^2$ w odchyleniu standardowym estymatora. Tę obserwacje potwierdzają obliczenia poniżej.
+
+```{r}
+tempdf <- data.frame(
+  "k" = PU5_table$k,
+  "Szerokość przedziału" = PU5_table$gorna_R - PU5_table$dolna_R,
+  check.names = FALSE
+)
+knitr::kable(t(tempdf), digits = 2,
+  caption = "Zmiany w szerokości przedziału")
+```
+
+## **Zadanie 6**
+**Podaj przewidywany czas obsługi, którego można oczekiwać, jeśli serwisowanych było $k$ maszyn, oraz 95% przedział predykcyjny dla tego czasu, $k \in \{1,5,8,11,25,100\}$. Oblicz przedział predykcyjny za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R. Jak długość przedziału predykcyjnego zależy od miejsca punktu względem danych?**
+
+**Część teoretyczna:**
+
+Przewidywana wartość czasu obsługi dla $k$ maszyn jest taka sama jak w Zadaniu 5, czyli $\hat y_k = \hat\beta_0 + \hat\beta_1 k$
+
+Dla **nowej pojedynczej obserwacji** $Y_h$ w punkcie $X = k$  95% przedział predykcyjny ma postać:
+$$\hat y_k \ \pm\ t_{0.975,n-2} \cdot
+s \sqrt{1 + \frac{1}{n} + \frac{(k - \bar X)^2}{\sum_{i=1}^{n}(X_i - \bar X)^2}}$$
+\clearpage
+```{r}
+# Wykorzystujemy funkcje z wczesniej i zmieniamy tryb
+PU6_table <- PU_fun(k, reg, predykcja = TRUE)
+
+knitr::kable(PU6_table, digits = 2,
+  caption = "95% przedziały predykcyjne dla E[Y | X=k]")
+```
+
+**Komentarz:** Długość przedziału predykcyjnego zachowuje się podobnie jak w Zadaniu 5 – jest najmniejsza w pobliżu średniej liczby kopiarek $\bar X \approx 5.1$ i rośnie, gdy k oddala się od średniej $\bar X$. Ze względu na dodatkowy składnik $1$ pod pierwiastkiem, przedziały predykcyjne są zawsze szersze od odpowiadających im przedziałów ufności.
+
+```{r}
+tempdf <- data.frame(
+  "k" = PU6_table$k,
+  "Szerokość przedziału" = PU6_table$gorna_R - PU6_table$dolna_R,
+  check.names = FALSE
+)
+knitr::kable(t(tempdf), digits = 2,
+  caption = "Zmiany w szerokości przedziału")
+```
+
+## **Zadanie 7**
+**Dodaj do wykresu z danymi 95% przedziały ufności oraz przedziały predykcyjne dla poszczególnych obserwacji. Wyjaśnij, dlaczego przedziały ufności są zawsze mniejsze niż przedziały predykcyjne.**
+
+```{r}
+# Wykres + prosta regresji
+plot(X, Y,
+     pch = 19,
+     xlab = "Liczba kopiarek",
+     ylab = "Czas (godziny)",
+     main = "Dane z 95% przedziałami ufności i predykcyjnymi")
+abline(reg, col = "red", lwd = 1)
+
+# Przedziały ufności - order(X), żeby linie nie były poszarpane
+PU  <- predict(reg, interval = "confidence", level = 0.95)
+lines(X[order(X)], PU[order(X), "lwr"], col = "blue", lwd = 1)
+lines(X[order(X)], PU[order(X), "upr"], col = "blue", lwd = 1)
+
+# Przedziały predykcyjne
+PP  <- predict(reg, interval = "prediction", level = 0.95)
+lines(X[order(X)], PP[order(X), "lwr"], col = "darkgreen", lwd = 1)
+lines(X[order(X)], PP[order(X), "upr"], col = "darkgreen", lwd = 1)
+
+legend("topleft",
+       legend = c("Prosta regresji", "Przedział ufności", "Przedział predykcyjny"),
+       col = c("red", "blue", "darkgreen"), lwd = 1.5)
+```
+
+**Wyjaśnienie:** **Przedziały ufności** są węższe, bo opisują tylko niepewność co do średniej wartości czasu obsługi w danym punkcie X. **Przedziały predykcyjne** są natomiast szersze, bo muszą jeszcze uwzględnić dodatkowy, losowy błąd pojedynczej nowej obserwacji. Dodatkowo wynika to z różnicy we wzorach, o której wspomniałam już w poprzednim zadaniu.
+
+## **Zadanie 8**
+**Załóżmy, że $n=40$, $\sigma^2=70$, $SSX=\sum_i (X_i-\bar{X})^2=500$.**
+
+**a) Oblicz moc dla odrzucenia hipotezy zerowej $H_0:\ \beta_1=0$ na poziomie istotności $\alpha=0.05$, jeżeli prawdziwa wartość $\beta_1=1$.**
+
+**Część teoretyczna:**
+
+Wykonujemy test: $H_0: \beta_1 = 0 \ \text{vs} \ H_1: \beta_1 \neq 0$ na poziomie istotności $\alpha = 0.05$.
+
+Statystyka testowa ma postać 
+$$t = \frac{\hat\beta_1}{SE(\hat\beta_1)}=\frac{\hat\beta_1}{0.14},\text{ gdzie} \  SE(\hat\beta_1) = \sqrt{\frac{\sigma^2}{SSX}} = \sqrt{\frac{70}{500}} \approx 0.374$$
+
+Statystyka T ma przybliżony niecentralny rozkład studenta z $n-2=38$ stopniami swobody i parametrem niecentralności $$\delta=\frac{\beta_1}{SE(\hat\beta_1)}=\beta_1 \sqrt{\frac{SSX}{\sigma^2}}, \text{ czyli } \ T \sim t(38, \delta).$$
+Moc testu, czyli prawdopodobieństwo odrzucenia $H_0$, gdy $H_1$ jest prawdziwe, jest równa
+$$\pi(a)=P_{\beta_1 =a}(|T|>t_c) \ \ \text{dla dowolnej wartości} \ \ a \in \mathbb{R}\setminus\{0\}$$
+```{r}
+# Funkcja mocy dla beta1
+power_fun <- function(beta1, n = 40, sigma2 = 70, SSX = 500, alpha = 0.05) {
+  tcrit <- qt(1 - alpha/2, df = n-2)   # wartość krytyczna t
+  delta <- beta1 * sqrt(SSX / sigma2) # parametr niecentralności
+  
+  # P(|T| > tcrit) dla T ~ t_n(df, delta)
+  # = 1 - P(-t < T < t) = 1 - ( P(T<t) - P(T < -t) )
+  power <- 1 - ( pt(tcrit, df = n-2, ncp = delta) - pt(-tcrit, df = n-2, ncp = delta) )
+  return(power)
+}
+
+# Moc z zadania
+power_a <- power_fun(beta1 = 1)
+```
+
+**Komentarz:** Otrzymana wartość `r power_a` pokazuje, jak duże jest prawdopodobieństwo odrzucenia $H_0$ przy prawdziwym $\beta_1 = 1$. Jak możemy zauważyć - prawdopodobieństwo jest duże ($\approx 74 \%$).
+
+**b) Przedstaw na wykresie moc jako funkcję $\beta_1$ dla wartości $\beta_1$ pomiędzy $-2$ a $2$.**
+```{r}
+# Parametry do wykresu
+beta1_seq <- seq(-2, 2, by = 0.01)
+power_b <- sapply(beta1_seq, power_fun)
+
+# Wykres
+plot(beta1_seq, power_b, type = "l",
+     xlab = expression(beta[1]),
+     ylab = "Moc testu",
+     lwd = 2)
+abline(h = c(0.8, 0.9), lty = 2, col = "grey")
+abline(v = 0, lty = 3, col = "grey")
+```
+
+**c) Powtórz zadanie b) dla wartości $\sigma^2=120$. Dodaj odpowiedni wykres do wykresu. Porównaj wyniki.**
+
+```{r}
+power_c <- sapply(beta1_seq, power_fun, sigma2 = 120)
+
+# Wykres
+plot(beta1_seq, power_b, type = "l",
+  xlab = expression(beta[1]),
+  ylab = "Moc testu",
+  main = expression(paste("Moc testu dla ", sigma^2, " = 70 i ", sigma^2, " = 120")),
+  lwd = 2)
+lines(beta1_seq, power_c, col = "red", lwd = 2, lty = 2)
+
+legend("bottomright",
+  legend = c(expression(sigma^2 == 70),
+            expression(sigma^2 == 120)),
+  col = c("black", "red"),
+  lty = c(1, 2),
+  lwd = 2)
+```
+
+**Komentarz:**
+Dla $\sigma^2 = 120$ krzywa mocy leży wyraźnie niżej niż dla $\sigma^2 = 70$. Oznacza to, że przy większej wariancji (większym „szumie” w danych) test ma mniejszą moc – trudniej jest wykryć ten sam efekt $\beta_1$, czyli przy tej samej liczbie obserwacji i tym samym $SSX$ zwiększenie $\sigma^2$ osłabia test.
+
+## **Zadanie 9**
+**Wygeneruj wektor $X=(X_1,\ldots,X_{200})^\top$ z wielowymiarowego rozkładu normalnego $N(0,\tfrac{1}{500}I)$. Następnie wygeneruj $1000$ wektorów $Y$ z modelu $Y=5+\beta_1 X+\varepsilon$, gdzie:**
+
+a) $\beta_1=0$, $\varepsilon\sim N(0,I)$.
+b) $\beta_1=0$, $\varepsilon_1,\ldots,\varepsilon_{200}$ są iid z rozkładu wykładniczego $\mathrm{Exp}(1)$.
+c) $\beta_1=0$, $\varepsilon_1,\ldots,\varepsilon_{200}$ są iid z rozkładu logistycznego $\mathcal{L}(0,1)$.
+d) $\beta_1=2$, $\varepsilon\sim N(0,I)$.
+e) $\beta_1=2$, $\varepsilon_1,\ldots,\varepsilon_{200}$ są iid z rozkładu wykładniczego z parametrem $\lambda=1$.
+f) $\beta_1=2$, $\varepsilon_1,\ldots,\varepsilon_{200}$ są iid z rozkładu logistycznego $\mathcal{L}(0,1)$.
+
+**Dla każdego powtórzenia eksperymentu przetestuj hipotezę $H_0:\ \beta_1=0$ i oszacuj prawdopodobieństwo odrzucenia $H_0$ na podstawie częstości odrzuceń w próbie (osobno dla punktów a-f). Porównaj te estymatory z teoretycznym prawdopodobieństwem błędu I rodzaju (dla a-c) oraz z teoretyczną mocą (dla d-f) obliczonymi przy założeniu, że szum ma rozkład normalny. Podsumuj wyniki.**
+
+```{r}
+# Parametry i wektor z zadania
+n <- 200
+rep <- 1000
+X <- rnorm(n, mean = 0, sd = sqrt(1/500))
+
+# Funkcja licząca częstość odrzuceń H0: beta1 = 0
+h0_fun <- function(beta1, dist = "normal") {
+  cnt <- 0 # do zapisywania liczby
+  
+  for (i in 1:rep) {
+    
+    # Generujemy błędy
+    eps <- if (dist == "normal") {
+      rnorm(n, mean = 0, sd = 1)
+    } else if (dist == "exp") {
+      rexp(n, rate = 1)
+    } else {
+      rlogis(n, location = 0, scale = 1)    # już ma średnią 0
+    }
+
+    Y <- 5 + beta1 * X + eps
+    
+    # p-wartość testu t dla nachylenia
+    p <- summary(lm(Y ~ X))$coefficients[2, 4]
+    
+    if (p < 0.05) cnt <- cnt + 1 # odrzucenie H0
+  }
+  
+  return(cnt / rep)
+}
+
+# Obliczenia dla przypadków a-f
+wyniki <- data.frame(
+  "Przypadek" = c("a) β1=0, N(0,I)",
+                "b) β1=0, Exp(1)",
+                "c) β1=0, L(0,1)",
+                "d) β1=2, N(0,I)",
+                "e) β1=2, Exp(1)",
+                "f) β1=2, L(0,1)"),
+  "Prawdopodobieństwo" = c(
+    h0_fun(0, "normal"),
+    h0_fun(0, "exp"),
+    h0_fun(0, "logistic"),
+    h0_fun(2, "normal"),
+    h0_fun(2, "exp"),
+    h0_fun(2, "logistic")),
+  check.names = FALSE
+)
+
+### OBLICZANIE MOCY TEORETYCZNEJ
+SSX_mt <- sum((X - mean(X))^2)
+moc_teoretyczna <- power_fun(beta1 = 2, n = n, sigma2 = 1, SSX = SSX_mt)
+```
+\clearpage
+```{r}
+knitr::kable(wyniki, caption = "Prawdopodobieństwo odrzucenia H0")
+```
+
+**Komentarz:** Otrzymane wyniki pokazują wpływ rozkładu błędu na działanie testu t. Zakładamy poziom ufności $95\%$
+
+Dla przypadków a-c, gdzie $\beta_1 = 0$, teoretyczny błąd I rodzaju, czyli prawdopodobieństwo odrzucenia $H_0$, gdy $H_0$ jest prawdziwe, wynosi $\alpha = 0.05.$ Łatwo możemy zauważyć, że częstotliwość odrzuceń (kolumna "Prawdopodobieństwo") dla tych konkretnych przypadków oscyluje w okolicy $0.05$
+
+Dla przypadków d-f, gdzie $\beta_1 = 2$, teoretyczna moc testu obliczona na podstawie wygenerowanego wektora $X$, czyli prawdopodobieństwo odrzucenia $H_0$, gdy $H_1$ jest prawdziwe, wynosi `r round(moc_teoretyczna, 2)`. Wyniki empiryczne dla d-e są bliskie tej wartości, a dla f - dalekie.
+
+Te różnice wynikają z kształtu rozkładu błędu. Standardowy rozkład normalny jest symetryczny i przewidywalny, więc statystyka t zachowuje się analogicznie. Rozkład wykładniczy jest mocno skośny i ma ogon z tylko jednej stronym, więc czasem generuje większe wartości t niż normalny. Powoduje to, że test częściej odrzuca $H_0$, przez co moc jest trochę wyższa niż dla $N(0,I)$.
+
+Dużą rozbieżność można zauważyć w f dla rozkładu logistycznego - ma on dużo większe ogony niż normalny, co oznacza większą losowość oraz wariancję błędu. Z tego powodu statystyka t częściej znajduje się w pobliżu 0, co skutkuje dużo rzadszym odrzuceniem $H_0$ przez test, co z kolei zmniejsza moc testu.
+
+## **Zadania teoretyczne (+1 pkt.)**
+**Dla modelu liniowego $Y=\beta_0+\beta_1 X+\varepsilon$ na podstawie $n=20$ obserwacji uzyskano estymatory $b_0=1$, $b_1=3$ oraz $s=4$.**
+
+### **Zadanie 1**
+**$s(b_1)=1$, gdzie $s(b_1)$ jest estymatorem odchylenia standardowego $b_1$. Skonstruuj 95% przedział ufności dla $\beta_1$.**
+
+```{r}
+b1 <- 3
+sb1 <- 1
+n <- 20
+alpha <- 1 - 0.95
+tcrit <- round(qt(1 - alpha/2, df = n-2),3)
+PU_b1 <- round(c(b1 - tcrit * sb1, b1 + tcrit * sb1), 3)
+```
+
+**Odpowiedź:** Kwantyl t-Studenta dla poziomu $1 - \frac{\alpha}{2}=0.975$ i $\text{df}= n-2 = 18$ to $t_{0.975,18} \approx$ `r tcrit`.
+
+Przedział ufności 95% obliczamy ze wzoru: $b_1 \pm t_{0.975,18}s(b_1)$. Po obliczeniu otrzymujemy: [`r PU_b1[1]`, `r PU_b1[2]`].
+
+
+### **Zadanie 2**
+**Czy masz statystyczne uzasadnienie dla twierdzenia, że $Y$ zależy od $X$?**
+```{r}
+p <- round(2 * (1 - pt(abs(b1/sb1), df = n-2)), 3)
+```
+**Odpowiedź:** Tak, wystarczy przetestować hipotezę $H_0: \beta_1 = 0 \ \text{vs} \ H_1: \beta_1 \neq 0$, gdzie statystyka testowa to $$t = \frac{b_1}{s(b_1)} = 3.$$
+
+Obliczenie p-wartości daje nam wynik $p \approx$ `r p`. Ponieważ p-wartość < `r alpha`, odrzucamy hipotezę zerową. Skoro $\beta_1 \neq 0$, mamy statystyczne uzasadnienie, że Y zależy od X.
+
+### **Zadanie 3**
+**95% przedział ufności dla $E(Y)$, gdy $X=5$, wynosi $[13,19]$. Znajdź odpowiedni przedział predykcyjny.**
+```{r}
+# Z zadania
+s <- 4
+
+# Obliczenia
+tcrit <- qt(0.975, df = 18)
+yhat <- (13+19)/2
+syhat <- 3 / tcrit
+
+# Przedział predykcyjny
+SE_pred <- sqrt(syhat^2 + s^2)
+
+PP_yhat <- round(c(yhat - tcrit * SE_pred,
+        yhat + tcrit * SE_pred), 3)
+```
+**Odpowiedź:** Ze wzoru na przedział ufności możemy obliczyć: 
+
+- wartość estymowanej średniej $\hat y = \frac{13+19}{2}=16$
+- $s_{\hat y} =$ `r syhat` obliczone z $19-16=3= t_{0.975,18} \cdot s_{\hat y}$
+
+Ogólny wzór na przedział predykcyjny to:
+$$\hat y \ \pm\ t_{0.975,n-2} \cdot s \sqrt{1 + \frac{1}{n} + \frac{(X - \bar X)^2}{\sum_{i=1}^{n}(X_i - \bar X)^2}}.$$
+Ponieważ wiemy, że:
+$$s_{\hat y}^2=s^2\cdot(\frac{1}{n}+\frac{(k- \bar X)^2}{SSX}),$$
+możemy przekształcić wzór na przedział predykcyjny na:
+$$\hat y \ \pm\ t_{0.975,18} \cdot \sqrt{s_{\hat y}^2+s^2}.$$
+Proste obliczenia dają nam przedział predykcyjny [`r PP_yhat[1]`, `r PP_yhat[2]`].

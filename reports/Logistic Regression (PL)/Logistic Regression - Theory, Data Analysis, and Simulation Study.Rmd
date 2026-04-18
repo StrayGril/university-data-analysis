@@ -1,0 +1,591 @@
+---
+title: "Zaawansowane modele liniowe — Raport z listy 1"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: true
+header-includes: 
+  - \renewcommand{\contentsname}{Spis Treści}
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \captionsetup{labelfont=bf, font=small}
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "pdf",
+  message = FALSE,
+  fig.align = "center",
+  out.width='50%',
+  warning = FALSE)
+
+set.seed(2026)
+library(ggplot2)
+library(pROC)
+library(kableExtra)
+library(knitr)
+library(MASS)
+```
+
+**Adnotacja:** Dla zapewnienia powtarzalności wyników ziarno losowe zostało ustawione na 2026.
+
+\clearpage
+
+# Podstawy teoretyczne
+
+## Model regresji logistycznej
+
+Rozważamy zmienną odpowiedzi $Y_i \in \{0,1\}$ opisującą sukces przyjęcia na studia. Zakładamy, że $Y_i \sim \text{Bern}(p_i),$ gdzie $p_i = P(Y_i = 1 \mid x_i).$
+
+W modelu regresji logistycznej zależność między prawdopodobieństwem sukcesu a zmiennymi objaśniającymi opisuje predyktor:
+$$\eta_i = x_i^T \beta = \beta_0 + \beta_1 x_{i,1} + \dots + \beta_p x_{i,p}.$$
+
+Zastosowanie funkcji linkującej logit prowadzi do relacji
+
+$$logit(p_i)=\log\left(\frac{p_i}{1-p_i}\right) = x_i^T \beta,$$
+
+stąd prawdopodobieństwo sukcesu ma postać
+
+$$p_i = \frac{1}{1 + e^{-x_i^T\beta}}.$$
+
+Parametry $\beta = (\beta_0,\beta_1,\dots,\beta_p)$ opisują wpływ zmiennych objaśniających na logarytm ilorazu szans.
+
+---
+
+## Funkcje linkujące
+
+W analizie rozważamy cztery funkcje linkujące opisujące zależności:
+
+* **logit**: $logit(p_i) = \log\left(\frac{p_i}{1-p_i}\right)$
+* **probit**: $probit(p_i) = \Phi^{-1}(p_i),$ gdzie $\Phi$ oznacza dystrybuantę standardowego rozkładu normalnego,
+* **cauchit**: $cauchit(p_i) = F^{-1}(p_i),$ gdzie $F$ oznacza kwantyl z rozkładu Cauchy'ego
+* **cloglog**: $cloglog(p_i) = \log(-\log(1-p_i)).$
+
+---
+
+## Estymacja parametrów
+
+Parametry modelu $\beta$ wyznaczane są metodą największej wiarygodności. Dla obserwacji $i=1,\dots,n$ funkcja wiarygodności ma postać
+
+$$L(\beta)=\prod_{i=1}^{n} p_i^{y_i}(1-p_i)^{1-y_i},$$
+
+a jej logarytm (logwiarygodność) wynosi
+
+$$\ell(\beta)=\sum_{i=1}^{n} \left[y_i \log(p_i)+(1-y_i)\log(1-p_i)\right].$$
+
+Estymator największej wiarygodności $\hat{\beta}$ maksymalizuje funkcję $\ell(\beta)$. Ponieważ rozwiązanie tego równania nie jest wyznaczane jawnie, do wyznaczenia estymatorów używamy funkcji glm() z bazowego R.
+
+---
+
+## Macierz informacji Fishera i estymator macierzy kowariancji
+
+Macierz informacji Fishera w modelu logistycznym ma postać
+
+$$J = I(\beta) = X' W X,$$
+
+gdzie $W =S(\beta) = p_i(1-p_i)I_n,$ a $I_n$ oznacza macierz identycznościową o wymiarze $n.$ 
+
+Asymptotyczna macierz kowariancji estymatora największej wiarygodności dana jest wzorem:
+$$\text{Cov}(\hat{\beta}) = J^{-1}.$$
+
+Jej elementy diagonalne odpowiadają wariancjom estymatorów parametrów, a ich pierwiastki są estymatorami odchyleń standardowych.
+
+---
+
+## Testy istotności parametrów
+
+**Testowanie istotności współczynników w modelu regresji logistycznej**
+
+Rozważamy test istotności dla pojedynczego parametru $\beta_i$ w modelu regresji logistycznej. Testujemy hipotezy:
+$$H_{0i}: \beta_i=0 \quad \text{vs} \quad H_{1i}: \beta_i \neq 0.$$
+
+Do weryfikacji prawdziwości hipotezy zerowej wykorzystujemy statystykę testową postaci:
+$$T = \frac{\hat{\beta}_i}{\sqrt{J_{ii}^{-1}}},$$
+gdzie $J^{-1}_{ii}$ oznacza i-ty element diagonalny odwrotności macierzy informacji Fishera.
+
+Hipotezę zerową odrzucamy na poziomie istotności $\alpha,$ gdy $|T|>z_c,$ gdzie $z_c=\Phi^{-1}(1-\alpha /2)$ jest kwantylem rzędu $1 - \alpha/2$ standardowego rozkładu normalnego.
+
+**Równoczesne testowanie istotności współczynników modelu regresji logistycznej**
+
+Niech $A \subset \{0,1,\dots,p-1\}$ oraz $A \neq \emptyset$. Rozważamy test jednoczesnej istotności dla wybranych parametrów $\beta$ w modelu regresji logistycznej. Formułujemy hipotezy:
+
+$$H_0: (\forall{i\in A)} \ \beta_i=0 \quad \text{vs} \quad H_1: (\exists{i\in A)} \beta_i \neq 0.$$
+
+Do weryfikacji hipotezy wykorzystujemy statystykę testową opartą na statystyce *Deviance*:
+
+$$\chi^2 = D(M_1) - D(M_2),$$
+
+gdzie
+
+* $D(M_1)$ – statystyka Deviance dla modelu zredukowanego,
+* $D(M_2)$ – statystyka Deviance dla modelu pełnego.
+
+Hipotezę zerową odrzucamy na poziomie istotności $\alpha$, gdy: 
+$$\chi^2 > \chi^2_{1-\alpha, k},$$
+gdzie $k$ to liczba stopni swobody równa liczbie regresorów bez interceptu,  a $\chi^2_{1-\alpha,k}$ oznacza kwantyl rzędu $1-\alpha$ rozkładu chi-kwadrat o $k$ stopniach swobody. W zadaniach przyjęte zostało $\alpha = 0.05.$
+
+---
+
+## Krzywa ROC i AUC
+
+Krzywa ROC (Receiver Operating Characteristic) przedstawia zdolność modelu do rozróżniania klas. Dla różnych progów klasyfikacji wyznacza się $TPR$ (True Positive Rate) oraz $FPR$ (False Positive Rate).
+
+Krzywa ROC jest wykresem punktów $(FPR,TPR)$. 
+
+Miara jakości klasyfikacji $AUC$ (Area Under Curve) to pole pod krzywą ROC. Im większa wartość $AUC$, tym lepsza zdolność modelu do rozróżniania klas.
+
+---
+
+## Obciążenie estymatora
+
+Obciążenie estymatora definiujemy jako
+
+$$Bias(\hat{\beta}) = E(\hat{\beta}) - \beta.$$
+Ponieważ wartość oczekiwana $E(\hat{\beta})$ jest zazwyczaj nieznana, przybliżamy ją średnią z uzyskanych estymatorów.
+
+# Analiza danych
+
+## Zadanie 1 - Import danych do R.
+
+Zaimportuj dane *Lista 1.csv*. Powyższy zbiór danych opisuje relacje między prawdopodobieństwami przyjęcia na studia (*success*) a wynikami z testów rachunkowych (*numeracy*) i poziomu niepewności (*anxiety*).
+
+```{r import}
+dane <- read.csv("data/lista_1.csv")
+```
+
+## Zadanie 2 - Boxplot numeracy a success.
+
+Narysuj boxploty dla zmiennej *numeracy* w rozbiciu na grupę przyjętych/nieprzyjętych osób. Opisz wnioski.
+
+```{r}
+boxplot(dane$numeracy ~ dane$success,
+        data = dane,
+        col = c("#FF4040", "#66CD00"),
+        xlab = "Success (0 = nieprzyjęty, 1 = przyjęty)",
+        ylab = "Numeracy",
+        main = "Boxplot numeracy ~ success")
+```
+**Komentarz:** Osoby przyjęte (success = 1) mają wyraźnie wyższe wartości zmiennej *numeracy* niż osoby nieprzyjęte. Mediana oraz cały rozkład dla tej grupy są przesunięte w górę, co wskazuje na pozytywną zależność między poziomem umiejętności numerycznych a szansą przyjęcia. Jednocześnie rozrzut w grupie przyjętych jest większy, co sugeruje większą zmienność wyników, ale mimo to wartości są ogólnie wyższe niż w grupie nieprzyjętych.
+
+
+## Zadanie 3 - Boxplot anxiety a success.
+
+Wykonaj poprzedni punkt dla zmiennej *anxiety*.
+
+```{r}
+boxplot(dane$anxiety ~ dane$success,
+        data = dane,
+        col = c("#FF4040", "#66CD00"),
+        xlab = "Success (0 = nieprzyjęty, 1 = przyjęty)",
+        ylab = "Anxiety",
+        main = "Boxplot anxiety ~ success")
+```
+
+**Komentarz:** Osoby przyjęte (success = 1) mają wyraźnie niższe wartości zmiennej *anxiety* niż osoby nieprzyjęte. Mediana dla grupy nieprzyjętych jest wyższa, a cały rozkład przesunięty w górę, co sugeruje, że wyższy poziom lęku wiąże się z mniejszym prawdopodobieństwem przyjęcia. Rozrzut w obu grupach jest porównywalny, choć w grupie przyjętych wartości są bardziej skoncentrowane w niższym zakresie.
+
+## Zadanie 4 - Regresja logistyczna model.
+
+Skonstruuj model regresji logistycznej dla powyższych danych. Podaj estymatory parametrów i wyniki testów istotności. Wyznacz przewidywane prawdopodobieństwo sukcesu u studenta, którego $anxiety=13$ a $numeracy=10$. Wyrysuj krzywą ROC dla dopasowanego modelu statystycznego.
+
+```{r}
+# Model regresji logistycznej
+model <- glm(success ~ numeracy + anxiety, data = dane, family = binomial)
+
+# Estymatory parametrów i testy istotności
+coef_df <- data.frame(summary(model)$coefficients)
+colnames(coef_df) <- c("estymatory","se","Statystyka Z","p-wartości")
+rownames(coef_df) <- c("Intercept", "Numeracy", "Anxiety")
+
+# Przewidywane prawdopodobieństwo dla anxiety = 13, numeracy = 10
+predykcja <- predict(model, newdata = data.frame(numeracy = 10, anxiety = 13), type = "response")
+
+knitr::kable(coef_df, digits = 4)
+```
+
+**Komentarz:** Model regresji logistycznej wskazuje, że obie zmienne są istotne statystycznie (p-wartości $< 0.05$), co oznacza, że zarówno *numeracy*, jak i *anxiety* mają istotny wpływ na prawdopodobieństwo sukcesu. Współczynnik przy *numeracy* jest dodatni, więc wzrost tej zmiennej zwiększa szansę przyjęcia, natomiast przy *anxiety* jest ujemny, co oznacza, że wyższy poziom lęku obniża to prawdopodobieństwo.
+
+Przewidywane prawdopodobieństwo sukcesu dla studenta o *numeracy* = 10 i *anxiety* = 13 jest umiarkowane (`r round(predykcja, 4)`), co jest spójne z wcześniejszymi wnioskami – przeciętne umiejętności i średni poziom lęku dają średnią szansę przyjęcia.
+
+```{r}
+# Krzywa ROC
+prob <- predict(model, type = "response")
+roc_obj <- roc(dane$success, prob)
+
+tpr <- roc_obj$sensitivities
+fpr <- 1 - roc_obj$specificities
+
+plot(fpr, tpr, type = "l", xlab = "False Positive Rate", ylab = "True Positive Rate", main = "Krzywa ROC", asp = 1)
+
+abline(0, 1, lty=2, col="grey")  # linia losowa
+```
+
+Krzywa ROC znajduje się wyraźnie powyżej linii losowej, a AUC = `r round(auc(roc_obj), 4)` wskazuje na bardzo dobre rozróżnianie klas przez mode, czyli rozróżnianie na osoby przyjęte i nieprzyjęte.
+
+## Zadanie 5 - Porównanie funkcji linkujących.
+
+Powtórz powyższe ćwiczenie dla różnych funkcji linkujących (probit, cauchit, cloglog) i oceń, która z funkcji linkujących daje najlepsze dopasowanie modelu do danych. Porównaj krzywe ROC dla modeli z różnymi funkcjami linkującymi.
+
+```{r}
+# Modele z różnymi funkcjami linkującymi
+links <- c("logit", "probit", "cauchit", "cloglog")
+modele <- lapply(links, function(l) {
+  glm(success ~ numeracy + anxiety, data = dane, family = binomial(link = l))
+})
+names(modele) <- links
+
+# Porównanie modeli
+roc_list <- lapply(modele, function(m) {
+  roc(dane$success, predict(m, type = "response"))
+})
+
+tab5 <- data.frame(
+  AIC = sapply(modele, AIC),
+  AUC = sapply(roc_list, auc)
+)
+
+# Wykres ROC
+plot(0, 0,
+     type = "n",
+     xlim = c(-0.1,1.1),
+     ylim = c(-0.1,1.1),
+     xlab = "FPR",
+     ylab = "TPR",
+     main = "ROC",
+     asp = 1,
+     xaxs = "i",
+     yaxs = "i")
+
+for(i in seq_along(modele)){
+  fpr <- 1 - roc_list[[i]]$specificities
+  tpr <- roc_list[[i]]$sensitivities
+  
+  # przycięcie do [0,1]
+  fpr <- pmax(pmin(fpr, 1), 0)
+  tpr <- pmax(pmin(tpr, 1), 0)
+  
+  lines(fpr, tpr, col = i, lty = i)
+}
+
+abline(0, 1, lty=2)
+
+legend("bottomright",
+       legend = names(modele),
+       col = 1:length(modele),
+       lwd = 2,
+       bty = "n")
+```
+
+**Komentarz:** Krzywe ROC dla wszystkich funkcji linkujących praktycznie się pokrywają, co oznacza, że modele mają bardzo zbliżoną zdolność klasyfikacyjną. Różnice między nimi są minimalne i w praktyce nieistotne.
+
+
+```{r}
+knitr::kable(t(tab5), digits = 4)
+```
+
+Wartości AUC są niemal identyczne ($\approx 0.95$), co wskazuje, że każda z funkcji linkujących daje bardzo dobre dopasowanie modelu do danych. Oznacza to, że wybór funkcji linkującej nie ma dużego wpływu na jakość predykcji. Jeśli spojrzymy dodatkow na AIC, można wybrać model o najniższej wartości jako najlepszy, ale różnice ponownie są niewielkie. W takiej sytuacji standardowo wybierzemy model logitowy, ponieważ jest najłatwiejszy w interpretacji.
+
+## Zadanie 6 - Analiza modelu logit.
+
+Wyznacz estymator macierzy kowariancji wektora estymatorów parametrów w modelu regresji logistycznej. Następnie porównaj wartości na przekątnej z estymatorami odchyleń standardowych zwracanych przez R. Przetestuj hipotezę, że obie zmienne objaśniające nie mają wpływu na zmienną odpowiedzi. Podaj definicję parametru „epsilon” i jego wartość domyślną. Wykonaj ponownie obliczenia stosując wartości $epsilon$ ze zbioru: $10^{-1}$, $10^{-2}$, $10^{-3}$ i $10^{-6}$. Porównaj liczbę iteracji i wartości estymatorów poszczególnych parametrów.
+
+```{r}
+# macierz planu
+X <- model.matrix(model)
+
+# przewidywane prawdopodobieństwa
+p_hat <- predict(model, type = "response")
+
+# macierz wag
+W <- diag(p_hat * (1 - p_hat))
+
+# estymator macierzy kowariancji
+cov_macierz <- solve(t(X) %*% W %*% X)
+
+# porównanie
+tab6_se <- data.frame(
+  "se z macierzy" = sqrt(diag(cov_macierz)),
+  "se z modelu" = summary(model)$coefficients[,2],
+  check.names = FALSE
+)
+
+# test oparty na statystyce Deviance
+model_H1 <- glm(success ~ numeracy + anxiety, data = dane, family = binomial(link = "logit"))
+model_H0 <- glm(success ~ 1, data = dane, family = binomial(link = "logit"))
+
+DM0 <- deviance(model_H0)
+DM1 <- deviance(model_H1)
+
+chi2 <- DM0 - DM1
+p_value <- 1 - pchisq(chi2, df = 2)
+
+if(p_value < 0.05){
+  decision <- "odrzucamy $H_0$"
+} else {
+  decision <- "Brak podstaw do odrzucenia $H_0$"
+}
+
+# epsilony
+eps_values <- c(0.1, 0.01, 0.001, 1e-6)
+tab6_eps <- data.frame()
+
+for(eps in eps_values){
+  model_eps <- glm(success ~ numeracy + anxiety, data = dane, family = binomial(link = "logit"), control = glm.control(epsilon = eps, maxit = 100))
+  
+  tab6_eps <- rbind(
+    tab6_eps,
+    data.frame(
+      iteracje = model_eps$iter,
+      beta0 = coef(model_eps)[1],
+      beta1 = coef(model_eps)[2],
+      beta2 = coef(model_eps)[3]
+    )
+  )
+}
+rownames(tab6_eps) <- eps_values
+
+knitr::kable(t(tab6_se), digits = 4)
+```
+
+**Komentarz:** Jak łatwo zauważyć - wartości estymatów odchyleń standardowych zwracane przez R są zgodne z wartościami teoretycznymi  na przekątnej estymatora macierzy kowariancji z niewielkimi nieistotnymi różnicami, co oznacza, że funkcje w R zostaly poprawnie zaimplemetnowane.
+
+Statystyka testowa wynosi `r round(chi2, 4)`, a p-wartość $\approx$ `r round(p_value, 9)`, więc podejmujemy decyzję: `r decision` Oznacza to, że conajmniej jedna zmienna (*numeracy* lub *anxiety*) istotnie wpływa na prawdopodobieństwo sukcesu.
+
+**Parametr epsilon** w funkcji *glm.control()* określa kryterium zbieżności algorytmu iteracyjnego (IRLS). Iteracje są przerywane, gdy spełniony jest warunek:
+$$\frac{|dev - dev_{old}|}{|dev| + 0.1} < \epsilon,$$
+gdzie:
+
+* $dev$ oznacza aktualną wartość dewiancji,
+* $dev_{old}$ oznacza wartość dewiancji z poprzedniej iteracji.
+
+Domyślna wartość parametru epsilon to $10^{-8}.$
+
+```{r}
+knitr::kable(tab6_eps, digits = 4)
+```
+
+Dla większych wartości (np. $10^{-1}$) algorytm kończy się szybciej (mniej iteracji), ale estymatory mogą być mniej dokładne. Dla mniejszych wartości natomiast (np. $10^{-6}$) liczba iteracji rośnie, ale wyniki stabilizują się i są dokładniejsze. Już dla $10^{-3}$ czy $10^{-6}$ wartości parametrów są bardzo zbliżone do siebie, co oznacza osiągnięcie zbieżności. Ponownie ponieważ w R domyślna wartość to $10^{-8},$ możemy założyć poprawność dopasowania modelu.
+
+# Symulacje
+
+## Zadanie 1 - Symulacja modelu logistycznego.
+
+Wygeneruj macierz $X$ wymiaru $n=400$, $p=3$, której elementy są zmiennymi losowymi z rozkładu $N(0,\sigma^2=1/400).$ Załóżmy, że binarny wektor odpowiedzi jest wygenerowany zgodnie z modelem regresji logistycznej z wektorem $\beta=(3,3,3)$. Wyznacz macierz informacji Fishera w punkcie $\beta$ i asymptotyczną macierz kowariancji estymatorów największej wiarygodności. Następnie wygeneruj $1000$ replikacji wektora odpowiedzi zgodnie z powyższym modelem i na podstawie każdej replikacji wyznacz estymator wektora $\beta$. W tym celu skorzystaj z funkcji $glm()$, przy czym wyłącz z modelu intercept, gdyż nie korzystamy z niego przy generowaniu danych ($glm(y \sim X - 1,\ldots)$). 
+
+Na podstawie uzyskanego zbioru estymatorów:
+
+* Narysuj histogramy estymatorów $\hat\beta_1$, $\hat\beta_2$ i $\hat\beta_3$ i porównaj z ich rozkładami asymptotycznymi.
+* Wyestymuj obciążenie estymatorów $\hat\beta_1$, $\hat\beta_2$ i $\hat\beta_3$.
+* Wyestymuj macierz kowariancji wektora estymatorów $(\hat\beta_1,\hat\beta_2,\hat\beta_3)$ i porównaj z asymptotyczną macierzą kowariancji.
+
+```{r}
+# Macierz
+n <- 400
+p <- 3
+sigma2 <- 1/400
+X <- matrix(rnorm(n * p, mean = 0, sd = sqrt(sigma2)), nrow = n, ncol = p)
+beta <- c(3, 3, 3)
+
+# Macierz fishera
+macierz_fishera <- function(X, beta){
+  eta <- X %*% beta
+  p_i <- plogis(eta)
+  S <- diag(as.vector(p_i * (1 - p_i)))
+  J <- t(X) %*% S %*% X
+  list(J = J, p_i = p_i)
+}
+
+res <- macierz_fishera(X, beta)
+J <- res$J
+mkowariancji <- solve(J)
+
+# Replikacje
+symulacje_beta_hat <- function(X, p_i, rep = 1000){
+  n <- nrow(X)
+  p <- ncol(X)
+  beta_hat <- matrix(NA, nrow = rep, ncol = p)
+  
+  for(i in 1:rep){
+    Y <- rbinom(n, 1, p_i)
+    model <- glm(Y ~ X - 1, family = binomial(link = "logit"))
+    beta_hat[i, ] <- coef(model)
+  }
+  beta_hat
+}
+beta_hat <- symulacje_beta_hat(X, res$p_i, rep = 1000)
+
+# Histogramy
+hist_beta <- function(beta_hat, beta, mkowariancji, mfrow = c(1,3)){
+
+  sd_beta <- sqrt(diag(mkowariancji))
+  p <- ncol(beta_hat)
+
+  par(mfrow = mfrow, mar = c(2,2,2,1))
+
+  for(j in 1:p){
+    hist(beta_hat[,j],
+         probability = TRUE,
+         breaks = 30,
+         main = paste("Histogram", j),
+         xlab = paste("β", j))
+    x <- seq(min(beta_hat[,j]), max(beta_hat[,j]), length = 200)
+    lines(x, dnorm(x, mean = beta[j], sd = sd_beta[j]), col = "red", lwd = 2)
+  }
+}
+hist_beta(beta_hat, beta, mkowariancji)
+
+# obciążenie
+beta_mean <- colMeans(beta_hat)
+bias <- beta_mean - beta
+
+# macierz kowariancji
+cov_emp <- cov(beta_hat)
+
+roznice <- cov_emp - mkowariancji
+```
+
+**Komentarz:**
+Histogramy estymatorów $\hat{\beta}_1, \hat{\beta}_2, \hat{\beta}_3$ są zbliżone do rozkładów normalnych. Na wykresach naniesiono teoretyczne gęstości rozkładów asymptotycznych $N(\beta_j, Var(\beta_j))$, gdzie wariancje pochodzą z macierzy kowariancji wyznaczonej na podstawie informacji Fishera. Widoczna jest dobra zgodność między rozkładami empirycznymi a rozkładami asymptotycznymi, co potwierdza asymptotyczną normalność estymatorów największej wiarygodności w modelu regresji logistycznej.
+
+Obciążenia estymatorów mieszczą się w przedziale [`r round(range(bias)[1], 4)`, `r round(range(bias)[2], 4)`], a dla `r sum(ifelse(bias < 0, 1, 0))` zmiennej estymator jest ujemny. Średnie obciążenie wynosi `r round(mean(bias), 4)`, co wskazuje na lekką tendencję do przeszacowania, ale względem $\beta = 3$ pozostaje ono małe, więc estymatory można uznać za w przybliżeniu nieobciążone.
+
+
+Różnice między empiryczną a asymptotyczną macierzą kowariancji mieszczą się w przedziale [`r round(range(roznice)[1], 4)`, `r round(range(roznice)[2], 4)`] i są niewielkie. Średnia różnica wynosi `r round(mean(roznice), 4)`, co wskazuje na dobrą zgodność obu macierzy.
+
+## Zadanie 2 - Wpływ liczby obserwacji.
+
+Doświadczenie powtórz w przypadku, gdy $n=100$.
+
+```{r}
+# Generujemy X
+n <- 100
+X <- matrix(rnorm(n * p, mean = 0, sd = sqrt(sigma2)), nrow = n, ncol = p)
+
+# Macierz fishera
+res <- macierz_fishera(X, beta)
+J <- res$J
+mkowariancji <- solve(J)
+
+# Replikacje
+beta_hat <- symulacje_beta_hat(X, res$p_i, rep = 1000)
+
+# Histogramy
+hist_beta(beta_hat, beta, mkowariancji)
+
+# obciążenie
+beta_mean <- colMeans(beta_hat)
+bias2 <- beta_mean - beta
+
+# macierz kowariancji
+cov_emp <- cov(beta_hat)
+
+roznice2 <- cov_emp - mkowariancji
+```
+**Komentarz:**
+Histogramy są bardziej rozproszone niż dla $n=400,$ a dopasowanie do rozkładu normalnego jest słabsze. Wynika to z mniejszej liczby obserwacji, co pogarsza przybliżenie asymptotyczne. Obciążenia mieszczą się w przedziale [`r round(range(bias2)[1], 4)`, `r round(range(bias2)[2], 4)`], a średnie obciążenie to `r round(mean(bias2), 4)`. Możemy zauważyć, że wartości są większe niż dla $n=400,$ choć nadal stosunkowo niewielkie. 
+
+Analogicznie różnice między empiryczną i asymptotyczną macierzą kowariancji są większe (zakres: [`r round(range(roznice2)[1], 4)`, `r round(range(roznice2)[2], 4)`], średnia: `r round(mean(roznice2), 4)`), co oznacza słabszą zgodność z teorią przy mniejszym $n$.
+
+## Zadanie 3 - Wpływ korelacji regresorów. 
+
+Punkt 1 powtórz w przypadku, gdy wiersze macierzy $X$ są niezależnymi wektorami losowymi z wielowymiarowego rozkładu normalnego $N(0,\Sigma)$ z macierzą kowariancji $\Sigma=\frac{1}{n}S$, gdzie $S_{ii}=1$, a dla $i\ne j$ mamy $S_{ij}=0.3$.
+
+```{r}
+# macierz X
+n <- 400
+S <- matrix(0.3, nrow = p, ncol = p)
+diag(S) <- 1
+Sigma <- (1/n) * S
+X <- mvrnorm(n, mu = rep(0,p), Sigma = Sigma)
+
+# Macierz fishera
+res <- macierz_fishera(X, beta)
+J <- res$J
+mkowariancji <- solve(J)
+
+# Replikacje
+beta_hat <- symulacje_beta_hat(X, res$p_i, rep = 1000)
+
+# Histogramy
+hist_beta(beta_hat, beta, mkowariancji)
+
+# obciążenie
+beta_mean <- colMeans(beta_hat)
+bias3 <- beta_mean - beta
+
+# macierz kowariancji
+cov_emp <- cov(beta_hat)
+roznice3 <- cov_emp - mkowariancji
+```
+
+**Komentarz:**
+Histogramy pozostają zbliżone do rozkładów normalnych, jednak są bardziej rozproszone niż w przypadku niezależnych regresorów. Dopasowanie do rozkładu asymptotycznego jest nieco słabsze, co wynika z dodatniej korelacji między zmiennymi objaśniającymi.
+
+Obciążenia mieszczą się w przedziale [`r round(range(bias3)[1], 4)`, `r round(range(bias3)[2], 4)`], a ich średnia wynosi `r round(mean(bias3), 4)`. Wartości pozostają niewielkie, co wskazuje, że estymatory nadal są w przybliżeniu nieobciążone, choć ich własności pogarszają się względem braku korelacji.
+
+Różnice między empiryczną i asymptotyczną macierzą kowariancji są większe niż w przypadku niezależnych regresorów (maksymalna różnica: `r round(max(abs(roznice3)), 4)`, średnia: `r round(mean(abs(roznice3)), 4)`). Oznacza to słabszą zgodność z wynikami asymptotycznymi.
+
+## Zadanie 4 - Wpływ liczby regresorów.
+
+Punkt 1 powtórz w przypadku, gdy elementy $X$ są niezależne, a $p=20$.
+
+```{r, out.width='70%'}
+# macierz
+p <- 20
+beta <- rep(3, p)
+X <- matrix(rnorm(n * p, mean = 0, sd = sqrt(sigma2)), nrow = n, ncol = p)
+
+# Macierz fishera
+res <- macierz_fishera(X, beta)
+J <- res$J
+mkowariancji <- solve(J)
+
+# Replikacje
+beta_hat <- symulacje_beta_hat(X, res$p_i, rep = 1000)
+
+# Histogramy
+hist_beta(beta_hat, beta, mkowariancji, mfrow = c(4,5))
+
+# obciążenie
+beta_mean <- colMeans(beta_hat)
+bias4 <- beta_mean - beta
+
+# macierz kowariancji
+cov_emp <- cov(beta_hat)
+
+roznice4 <- cov_emp - mkowariancji
+```
+**Komentarz:**
+Histogramy są bardziej zróżnicowane niż dla $p=3,$ a dopasowanie do rozkładu normalnego jest mniej stabilne dla poszczególnych współczynników.
+
+Obciążenia mieszczą się w przedziale [`r round(range(bias4)[1], 4)`, `r round(range(bias4)[2], 4)`], a średnie obciążenie wynosi `r round(mean(bias4), 4)`. Są one nieco większe niż dla mniejszej liczby regresorów.
+
+Różnice między empiryczną i asymptotyczną macierzą kowariancji są wyraźniejsze (maksymalna różnica: `r round(max(abs(roznice4)), 4)`, średnia: `r round(mean(abs(roznice4)), 4)`), co wskazuje na pogorszenie jakości przybliżenia asymptotycznego przy większym $p.$
+
+## Zadanie 5 - Porównanie wyników.
+
+**Komentarz:**
+Wraz ze zmniejszaniem liczby obserwacji $n$ pogarsza się dopasowanie rozkładów estymatorów do rozkładu normalnego, rośnie ich zmienność oraz obciążenie. Różnice między empiryczną i asymptotyczną macierzą kowariancji również się zwiększają, co oznacza słabszą zgodność z teorią asymptotyczną.
+
+Zwiększenie liczby regresorów $p$ przy stałej liczbie obserwacji również prowadzi do pogorszenia własności estymatorów — większej zmienności oraz większych różnic względem wyników asymptotycznych.
+
+Najlepsze własności estymatorów uzyskujemy przy dużej liczbie obserwacji i małej liczbie regresorów. Zmniejszenie $n$ lub zwiększenie $p$ (z umiarem) pogarsza jakość przybliżenia asymptotycznego i stabilność estymatorów.
+
+
+
+
+

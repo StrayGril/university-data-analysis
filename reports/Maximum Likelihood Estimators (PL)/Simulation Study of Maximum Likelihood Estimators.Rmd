@@ -1,0 +1,593 @@
+---
+title: "Statystyka — Raport z listy 2"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: true
+header-includes: 
+  - \renewcommand{\contentsname}{Spis Treści}
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \captionsetup{labelfont=bf, font=small}
+  - \setcounter{section}{2}
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "pdf",
+  message = FALSE,
+  fig.align = "center",
+  out.width='50%',
+  warning = FALSE)
+
+set.seed(21112025)
+library(ggplot2)
+library(LaplacesDemon)
+```
+**Adnotacja:** Dla zapewnienia powtarzalności wyników ziarno losowe zostało ustawione na 21112025.
+\clearpage
+```{r}
+# Funkcja używana do wyłuskania własności, które badamy
+podsumowanie <- function(wyniki, parametr){
+  srednie <- mean(wyniki)
+  wariancje <- var(wyniki)
+  bias <- srednie - parametr
+  mse <- bias^2 + wariancje
+  
+  data.frame(
+    Parametr = parametr,
+    Średnia = srednie,
+    Obciążenie = bias,
+    Wariancja = wariancje,
+    MSE = mse 
+  )
+}
+```
+
+## **Zadanie 1 - Rozkład dwumianowy**
+**Wygeneruj n = 50 obserwacji z rozkładu b(5,p). Na tej podstawie wyznacz wartość estymatora największej wiarygodności wielkości P(X ≥ 3), gdzie X ~ b(5,p). Doświadczenie powtórz 10 000 razy. Oszacuj wariancję, błąd średniokwadratowy oraz obciążenie analizowanego estymatora. Przedyskutuj uzyskane wyniki w zależności od wyboru parametru $p \in \{0.1, 0.3, 0.5, 0.7, 0.9\}$.**
+
+```{r}
+#### Funkcje do zadania 1 i 6
+# Symulacja
+sym1 <- function(n = 50, p, repetition = 10000){
+  wyniki <- replicate(repetition, {
+    # Generowanie próby z rozkładu dwumianowego B(5, p)
+    samp <- rbinom(n, size = 5, prob = p)
+    
+    # Estymator największej wiarygodności parametru p
+    p_hat <- mean(samp) / 5
+    
+    # Estymator P(X ≥ 3) dla X~B(5, p_hat)
+    estymator <- sum(dbinom(3:5, size = 5, prob = p_hat))
+    return(estymator)
+  })
+  
+  # Podsumowanie wyników (średnia, wariancja, obciążenie, MSE)
+  df <- podsumowanie(wyniki, parametr = sum(dbinom(3:5, size = 5, prob = p)))
+  
+  return(df)
+}
+
+# Tabela do generowania
+input1 <- function(n = 50){
+  rbind(
+    sym1(n = n, p = 0.1),
+    sym1(n = n, p = 0.3),
+    sym1(n = n, p = 0.5),
+    sym1(n = n, p = 0.7),
+    sym1(n = n, p = 0.9)
+  )
+}
+
+# Wykresy
+wariancja1 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = Parametr, y = Wariancja)) +
+    geom_line(color = "red", linewidth = 1.2) +
+    geom_point(size = 3, color = "darkred") +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Wariancja dla n = ", n), x = "Parametr p")+
+    theme(plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + ylim(limits)
+  return(g)
+}
+
+MSE1 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = Parametr, y = MSE)) +
+    geom_line(color = "green4", linewidth = 1.2) +
+    geom_point(size = 3, color = "darkgreen") +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Błąd średniokwadratowy dla n = ", n), x = "Parametr p")+
+    theme(plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + ylim(limits)
+  return(g)
+}
+
+obciazenie1 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = Parametr, y = Obciążenie)) +
+    geom_line(color = "blue", linewidth = 1.2) +
+    geom_point(size = 3, color = "darkblue") +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Obciążenie dla n = ", n), x = "Parametr p")+
+    theme(plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + ylim(limits)
+  return(g)
+}
+
+### Dane do wykresow
+tab1 <- input1(n = 50)
+```
+
+**Wyniki**
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Wykres dla obciążenia
+obciazenie1(tab1)
+# Wykres dla błędu średniokwadratowego
+MSE1(tab1)
+# Wykres dla wariancji
+wariancja1(tab1)
+```
+
+**Interpretacja wyników:** Jak widać na wykresach, obciążenie estymatora $\hat\theta = P_{\hat p}(X \geq 3)$ jest bardzo niewielkie (|obciążenie|$ \leq0.003$), co sprawia, że błąd średniokwadratowy (MSE) jest prawie równy wariancji dla wszystkich badanych wartości $p$. 
+
+Wariancja oraz MSE wykazują wyraźną symetrię względem $p=0.5$, gdzie osiągają maksimum. Wynika to z własności rozkładu dwumianowego oraz faktu, że wariancja estymatora $\hat p = \frac{\bar X}{5}$ ma postać $Var(\hat p)=\frac{p(1-p)}{5n}$, która też jest symetryczna względem 0.5 i również osiąga tam maksimum. W przeciwieństwie do wariancji i MSE, obciążenie estymatora $\hat\theta=g(\hat p)$ nie jest symetryczne, co wynika z jego zależności od krzywizny funkcji $g(p)=P(X \geq 3)$, która jest wypukła dla małych wartości $p$ i jedynie słabo wklęsła dla dużych.
+
+## **Zadanie 2 - Rozkład Poissona**
+**Wygeneruj n=50 obserwacji z rozkładu Poissona z parametrem $\lambda$. Na tej podstawie wyznacz wartość estymatora największej wiarygodności wielkości P(X = x), x = 0, 1,... ,10, gdzie $X \sim \pi (\lambda)$, co oznacza, że $P(X=k)=\frac{e^{-\lambda}\lambda^k}{k!}$. Doświadczenie powtórz 10 000 razy. Oszacuj wariancję, błąd średniokwadratowy oraz obciążenie analizowanego estymatora. Przedyskutuj uzyskane wyniki w zależności od wyboru parametru $\lambda \in \{0.5, 1, 2, 5 \}$.**
+
+**Wyniki**
+```{r}
+### Funkcje do zadania 2 i 6
+# Symulacja
+sym2 <- function(n = 50, lambda, repetition = 10000){
+  
+  # Zastosowanie estymacji od razu dla wartości od 0 do 10
+  wyniki_x <- lapply(0:10, function(x){ 
+    wyniki <- replicate(repetition, {
+      # Generowanie próbki
+      samp <- rpois(n, lambda = lambda)
+      
+      # Estymator największej wiarygodności
+      lambda_hat <- mean(samp)
+      
+      # Estymator P(X = x)
+      estymator <- dpois(x, lambda = lambda_hat)
+      
+      return(estymator)
+    })
+    
+    # Teoretyczna wartość parametru
+    parametr <- dpois(x, lambda = lambda)
+    
+    # Podsumowanie
+    df <- podsumowanie(wyniki, parametr)
+    df$x <- x 
+    return(df)
+  })
+  
+  # Podsumowanie pełne z uwzględnieniem x
+  wyniki_df <- do.call(rbind, wyniki_x)
+  wyniki_df <- wyniki_df[, c("x", "Parametr", "Średnia", "Obciążenie", "Wariancja", "MSE")]
+  return(wyniki_df)
+}
+
+# Tabela do generowania
+input2 <- function(n = 50){
+  rbind(
+    cbind(sym2(n = n, lambda = 0.5), lambda = 0.5),
+    cbind(sym2(n = n, lambda = 1), lambda = 1),
+    cbind(sym2(n = n, lambda = 2), lambda = 2),
+    cbind(sym2(n = n, lambda = 5), lambda = 5)
+  )
+}
+
+# Wykresy
+wariancja2 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = x, y = Wariancja, color = as.factor(lambda))) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 2) +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Wariancja dla n = ", n), x = "x", color = expression(lambda)) + 
+    theme(legend.position = c(0.95, 0.95),
+          legend.justification = c("right", "top"),
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + ylim(limits)
+  return(g)
+}
+
+MSE2 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = x, y = MSE, color = as.factor(lambda))) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 2) +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Błąd średniokwadratowy dla n = ", n), x = "x", color = expression(lambda)) + 
+    theme(legend.position = c(0.95, 0.95),
+          legend.justification = c("right", "top"),
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + ylim(limits)
+  return(g)
+}
+
+obciazenie2 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = x, y = Obciążenie, color = as.factor(lambda))) +
+    geom_line(linewidth = 1.2) +
+    geom_point(size = 2) +
+    theme_minimal(base_size = 14) +
+    labs(title = paste0("Obciążenie dla n = ", n), x = "x", color = expression(lambda)) + 
+    theme(legend.position = c(0.95, 0.05),
+          legend.justification = c("right", "bottom"),
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + ylim(limits)
+  return(g)
+}
+```
+
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Dane do wykresow
+tab2 <- input2(n = 50)
+# Wykres dla obciążenia
+obciazenie2(tab2)
+# Wykres dla błędu średniokwadratowego
+MSE2(tab2)
+# Wykres dla wariancji
+wariancja2(tab2)
+```
+
+**Interpretacja wyników:** Analogicznie jak w zadaniu 1. - widzimy, że obciążenie estymatorów największej wiarogodności wielkości $P(X=x)$ jest niewielkie ($\leq 0.0045$), z powodu czego wykresy błędu średniokwadratowego (MSE) i wariancji są niemalże identyczne. W dodatku w przypadkach poza $\lambda = 0.5$, wariancja i MSE $\approx 0$, gdy $x=\lambda$. Po osiągnięiu tego x, funkcja przez chwilę troszkę rośnie, po czym zaczyna łagodnie maleć ponownie do 0. Można również zauważyć zależność: czym większe lambda, tym większe funkcje przyjmuje maksimum na badanym przedziale. Te własnści wynikają z koncentracji masy rozkładu Poissona wokół $\lambda$. Dla wszystkich analizowanych $\lambda$ estymator jest stabilny i prawie nieobciążony.
+
+## **Zadanie 3 - Liczby pseudolosowe**
+**Liczby losowe czy pseudolosowe? Przedyskutuj wybór jednego z określeń na podstawie rozdziału 8.2.1 w Koronacki i Mielniczuk (2009), s. 427–429.**
+
+**Odpowiedź:** Uważam, że bardziej trafne jest określenie **liczby pseudolosowe**. Gdybyśmy mówili o losowości, to takich ciągów liczb nie dałoby się odtworzyć, gdyż - jak możemy przeczytać w *Słowniku Języka Polskiego* - zdarzenie losowe to takie, którego "zaistnienie zależy od przypadku". Pseudolosowość dużo bardziej oddaje charakter generowanych liczb, gdyż mamy element losowości (wynikający z ich pozornej **nieprzewidywalności** i **równomiernego rozkładu**) oraz element **deterministycznego algorytmu**, który sprawia, że przy tych samych warunkach początkowych (tzw. ziarnie, które ustawiamy) można dokładnie odtworzyć cały ciąg.
+
+## **Zadanie 4 - Rozkład Beta**
+**Wygeneruj n = 50 obserwacji z rozkładu beta z parametrami $\theta \in \{0.5, 1, 2, 5\}$ i $1$. Doświadczenie powtórz 10 000 razy. Na tej podstawie wyznacz wartość estymatora $I_d(\theta)$ informacji Fishera parametru $\theta$. Wynik zapamiętaj. Wygeneruj niezależnie n obserwacji z rozkładu beta z parametrami $\theta$ i 1. Wyznacz wartość estymatora największej wiarygodności parametru $\theta$. Zdefiniuj nową zmienną $Y=\sqrt{n I_d(\theta)},(\hat{\theta}-\theta)$. Oblicz jej wartość na podstawie zaobserwowanej próby oraz zapamiętanego wcześniej wyniku. Doświadczenie powtórz 10 000 razy. Narysuj histogram oraz wykres kwantylowo-kwantylowy. Przedyskutuj wybór liczby klas w histogramie oraz sposób wyznaczania kwantyli teoretycznych na wykresie kwantylowo-kwantylowym. Czy rozkład zmiennej losowej Y jest normalny?**
+
+```{r}
+sym4 <- function(n = 50, theta, repetition = 10000){
+  # Teoretyczna informacja Fishera (dla jednej obserwacji)
+  Id_theta <- 1 / (theta^2)
+  
+  wyniki <- replicate(repetition, {
+    # Generowanie próby z rozkładu Beta(theta, 1)
+    samp <- rbeta(n, shape1 = theta, shape2 = 1)
+    
+    # Estymator największej wiarygodności theta-hat
+    theta_hat <- -n / sum(log(samp))
+    
+    # Zmienna Y
+    Y <- sqrt(n * Id_theta) * (theta_hat - theta)
+    return(Y)
+  })
+  
+  return(wyniki)
+}
+
+# Wykresy histogramu i qqplot
+wizualizacja4 <- function(n = 50, theta){
+  # Tworzenie danych do wykresu
+  wyniki <- sym4(n = n, theta = theta)
+  
+  # Histogram
+  hist(wyniki, breaks = "FD", freq = FALSE,
+    main = bquote("Histogram Y dla " * theta == .(theta) * ", n = " * .(n)),
+    xlab = "Y", ylab = "Gęstość", col = "skyblue", border = "white")
+  # Krzywa gęstości N(0,1)
+  curve(dnorm(x, mean = 0, sd = 1), 
+    add = TRUE, col = "red", lwd = 2,
+    from = min(wyniki), to = max(wyniki))
+  box(lwd = 1) # ramka żeby wykresy były bardziej widoczne
+  
+
+  # QQ-plot
+  qqnorm(wyniki, 
+    main = paste0("Wykres QQ dla Y i n = ", n),
+    xlab = "Kwantyle teoretyczne N(0,1)",
+    ylab = "Kwantyle empiryczne próby Y")
+  qqline(wyniki, col = "red", lwd = 2)
+}
+```
+**Wyniki**
+```{r, out.width="24%", fig.show='hold', results='asis'}
+wizualizacja4(theta = 0.5)
+wizualizacja4(theta = 1)
+```
+
+```{r, out.width="24%", fig.show='hold', results='asis'}
+wizualizacja4(theta = 2)
+wizualizacja4(theta = 5)
+```
+**Teoria:** Informacja Fishera dla rozkładu $Beta(\theta,1)$ po przekształceniu wzoru wynosi $I(\theta)=\theta^{-2}$.
+
+**Odpowiedzi:** Zastosowano liczbę klas wyznaczaną metodą Freedmana-Diaconisa, ponieważ wykorzystuje ona rozstęp międzykwartylowy, co czyni ją odporną na wartości odstające, skośne rozkłady oraz dane, których normalność dopiero badamy. Pomimo że daje większą liczbę słupków i histogram jest mniej estetyczny, struktura danych jest wierniej odzwierciedlona niż przy metodach bardziej wygładzających jak np. metoda Sturgesa.
+
+Kwantyle teoretyczne obliczamy z użyciem funkcji qqnorm(), która korzysta z metody Tukeya i wyznacza je według wzoru:
+$$q_i = \Phi^{-1}\!\left( \frac{i-0.5}{n} \right),$$
+gdzie $q_i$ to **teoretyczny kwantyl**, a $\Phi^{-1}$ oznacza odwrotną dystrybuantę standardowego rozkładu normalnego. Jak możemy zauważyć na histogramach i wykresach kwantylowo-kwantylowych - zarówno krzywa gęstości normalnej, jak i prosta odniesienia na QQ-plocie bardzo dobrze dopasowują się do empirycznej dystrybucji $Y$. Świadczy to o tym, że rozkład zmiennej $Y$ jest w przybliżeniu normalny.
+
+## **Zadanie 5 - Porównanie estymatorów dla rozkładu Laplace'a**
+**Wygeneruj n = 50 obserwacji z rozkładu Laplace’a z parametrem przesunięcia $\theta$ i skali $\sigma$.**
+
+**(a)** $\theta=1$, $\sigma=1$, **(b)** $\theta=4$, $\sigma=1$, **(c)** $\theta=1$, $\sigma=2$.
+
+**Na tej podstawie oblicz wartość estymatora parametru $\theta$ postaci:**
+
+**(i)** $\hat\theta_1=\bar X$, **(ii)** $\hat\theta_2=\mathrm{Me}\{X_1,\ldots,X_n\}$, **(iii)** $\hat\theta_3 =\sum_{i=1}^n w_i X_i,$, **(iv)** $\hat\theta_4=\sum_{i=1}^n w_i X_{i:n}$.
+
+**Doświadczenie powtórz 10 000 razy. Na tej podstawie oszacuj wariancję, błąd średniokwadratowy oraz obciążenie każdego z estymatorów. Przedyskutuj uzyskane wyniki. Który estymator jest optymalny i dlaczego? Skonfrontuj aktualne wyniki z rezultatami uzyskanymi w zadaniu 1 z listy 1.**
+
+```{r}
+### Funkcje do zadania 5 i 6
+# Średnia
+estymator_i <- function(samp) mean(samp)
+
+# Mediana
+estymator_ii <- function(samp) median(samp)
+
+# Losowanie wag (z normalizacją)
+estymator_iii <- function(samp){
+  v <- rexp(length(samp))
+  v <- v / sum(v)
+  sum(v * samp)
+}
+
+# Wagi w oparciu o rozkład N(0,1)
+estymator_iv <- function(samp){
+  i <- 1:length(samp)
+  v <- dnorm( qnorm( (i - 1) / length(samp) ) ) - dnorm( qnorm( i / length(samp) ) )
+  samp <- sort(samp)
+  sum(v * samp)
+}
+
+estymatory <- function(samp){
+  c(i   = estymator_i(samp),
+    ii  = estymator_ii(samp),
+    iii = estymator_iii(samp),
+    iv  = estymator_iv(samp))
+}
+
+sym5 <- function(n = 50, theta, sigma, repetition = 10000){
+  wyniki <- replicate(repetition, {
+    # Generowanie próby z rozkładu Laplace(theta, sigma)
+    samp <- rlaplace(n = n, location = theta, scale = sigma)
+    # Estymowanie dla podpunktów i-iv
+    estymatory(samp)
+  })
+  
+  # Każdy wiersz to estymator (i, ii, iii, iv)
+  srednie <- rowMeans(wyniki)
+  wariancje <- apply(wyniki, 1, var)
+  bias <- srednie - theta
+  mse <- bias^2 + wariancje
+  
+  # Podsumowanie
+  data.frame(
+    Estymator = c("i", "ii", "iii", "iv"),
+    Theta = theta,
+    Sigma = sigma,
+    Średnia = srednie,
+    Obciążenie = bias,
+    Wariancja = wariancje,
+    MSE = mse
+  )
+}
+
+# Tabela do generowania
+input5 <- function(n = 50){
+  tab <- rbind(
+    sym5(n, theta = 1, sigma = 1),
+    sym5(n, theta = 1, sigma = 2),
+    sym5(n, theta = 4, sigma = 1)
+  )
+  # Dodanie poziomów, żeby móc pogrupować dane
+  tab$Wariant <- factor(paste0("Laplace(", tab$Theta, ",", tab$Sigma, ")"),
+    levels = c("Laplace(1,1)", "Laplace(1,2)", "Laplace(4,1)"))
+  return(tab)
+}
+
+# Wykresy
+wariancja5 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = Estymator, y = Wariancja, fill = Wariant)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+    labs(title = paste0("Wariancja dla n = ", n), x = "Estymator", y = "Wariancja", fill = "Rozkład") +
+    scale_fill_brewer(palette = "Set2") +
+    theme_minimal(base_size = 14) + 
+    theme(legend.position = c(0.05, 0.95),
+          legend.justification = c("left", "top"),
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + coord_cartesian(ylim = limits)
+  return(g)
+}
+
+MSE5 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = Estymator, y = MSE, fill = Wariant)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+    labs(title = paste0("Błąd średniokwadratowy dla n = ", n), x = "Estymator", y = "MSE", fill = "Rozkład") +
+    scale_fill_brewer(palette = "Set2") +
+    theme_minimal(base_size = 14) + 
+    theme(legend.position = c(0.05, 0.95),
+          legend.justification = c("left", "top"),
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + coord_cartesian(ylim = limits)
+  return(g)
+}
+
+obciazenie5 <- function(tab, n = 50, limits = NULL){
+  g <- ggplot(tab, aes(x = Estymator, y = Obciążenie, fill = Wariant)) +
+    geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+    labs(title = paste0("Obciążenie dla n = ", n), x = "Estymator", y = "Obciążenie", fill = "Rozkład") +
+    scale_fill_brewer(palette = "Set2") +
+    theme_minimal(base_size = 14) + 
+    theme(legend.position = c(0.05, 0.95),
+          legend.justification = c("left", "top"),
+          plot.title = element_text(hjust = 0.5),
+          panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5))
+  # Dodanie spojnych osi y do zadania 6
+  if(!is.null(limits)) g <- g + coord_cartesian(ylim = limits)
+  return(g)
+}
+
+```
+
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Dane do wykresow
+tab5 <- input5(n = 50)
+# Wykres dla wariancji
+wariancja5(tab5)
+# Wykres dla błędu średniokwadratowego
+MSE5(tab5)
+# Wykres dla obciążenia
+obciazenie5(tab5)
+```
+
+**Interpretacja wyników:** Jak można zauważyć na wykresie obciążenia - optymalne wydają się być estymatory I-III (średnia, mediana oraz estymator z losowymi wagami) pozostają praktycznie nieobciążone we wszystkich trzech konfiguracji parametrów rozkładu Laplace’a. Jest to zgodne z wynikami z listy 1, gdzie te same estymatory również nie wykazywały większych odchyleń od prawdziwej wartości parametru. Wyraźnie źle wypada estymator IV, którego obciążenie jest duże (zarówno dodatnie, jak i ujemne), co wynika z zastosowania wag opartych na rozkładzie normalnym, które niedopasowane są do znacznie cięższych ogonów rozkładu Laplace’a.
+
+Błąd kwadratowy jest najmniejszy dla **mediany**, choć warto zauważyć, że estymatory I–III osiągają bardzo zbliżone wartości MSE. Różnice są najwidoczniejsze na wykresie wariancji - ponownie **mediana** ma najlepsze własności (najniższą wariancje), co czyni ją najbardziej stabilnym estymatorem dla obserwacji ekstremalnych. 
+
+Na liście 1 najbardziej optymalnym estymatorem rozkładu okazała się średnia, co wynika z charakterystyki rozkładów Laplace'a i normalnego. Podczas gdy rozkład normalny jest bardziej zbalansowany, rozkład Laplace posiada dużo wartości ekstremalnych, na które odporna jest mediana.
+
+
+## **Zadanie 6 - Zmiany w liczebności próby**
+**Powtórz eksperyment numeryczny z zadań 1, 2, 4, 5 dla n=20 i n=100. Przedyskutuj uzyskane rezultaty w nawiązaniu do wcześniejszych wyników.**
+
+**Wyniki dla zadania 1**
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Funkcje do wspolnych limitow
+limits <- function(t1, t2){
+  ymin <- min(t1, t2, na.rm = TRUE)
+  ymax <- max(t1, t2, na.rm = TRUE)
+  return(c(ymin, ymax))
+}
+
+# Dane do wykresow
+tab1_20 <- input1(n = 20)
+tab1_100 <- input1(n = 100)
+lo1 <- limits(tab1_20$Obciążenie, tab1_100$Obciążenie)
+lm1 <- limits(tab1_20$MSE, tab1_100$MSE)
+lw1 <- limits(tab1_20$Wariancja, tab1_100$Wariancja)
+  
+# Wykres dla obciążenia
+obciazenie1(tab1_20, n = 20, limits = lo1)
+# Wykres dla błędu średniokwadratowego
+MSE1(tab1_20, n = 20, limits = lm1)
+# Wykres dla wariancji
+wariancja1(tab1_20, n = 20, limits = lw1)
+```
+
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Wykres dla obciążenia
+obciazenie1(tab1_100, n = 100, limits = lo1)
+# Wykres dla błędu średniokwadratowego
+MSE1(tab1_100, n = 100, limits = lm1)
+# Wykres dla wariancji
+wariancja1(tab1_100, n = 100, limits = lw1)
+```
+
+**Komentarz:** Dla mniejszych prób (n = 20) wariancja i MSE są wyraźnie większe, a obciążenie — choć nadal niewielkie — jest bardziej zmienne, co wynika z mniejszej stabilności estymatora przy małych próbach. Wraz ze wzrostem liczebności próby do n = 100 wszystkie trzy charakterystyki maleją, a wykresy stają się gładsze i bardziej symetryczne względem $p=0.5$. Te własności są zgodne z teoretycznym Prawem Wielkich Liczb.
+
+**Wyniki dla zadania 2**
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Dane do wykresow
+tab2_20 <- input2(n = 20)
+tab2_100 <- input2(n = 100)
+lo2 <- limits(tab2_20$Obciążenie, tab2_100$Obciążenie)
+lm2 <- limits(tab2_20$MSE, tab2_100$MSE)
+lw2 <- limits(tab2_20$Wariancja, tab2_100$Wariancja)
+# Wykres dla obciążenia
+obciazenie2(tab2_20, n = 20, limits = lo2)
+# Wykres dla błędu średniokwadratowego
+MSE2(tab2_20, n = 20, limits = lm2)
+# Wykres dla wariancji
+wariancja2(tab2_20, n = 20, limits = lw2)
+```
+
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Wykres dla obciążenia
+obciazenie2(tab2_100, n = 100, limits = lo2)
+# Wykres dla błędu średniokwadratowego
+MSE2(tab2_100, n = 100, limits = lm2)
+# Wykres dla wariancji
+wariancja2(tab2_100, n = 100, limits = lw2)
+```
+
+**Komentarz:** Dla n = 20 ponownie widzimy, że obciążenie, wariancja i MSE są najmniejsze w okolicach wartości $x \approx \lambda,$ ponieważ koncentruje się tam masa rozkładu Poissona, a estymator $\hat \lambda$ lepiej odwzorowuje rzeczywistą wartość parametru. Wraz ze wzrostem $n$ do 100 wszystkie charakterystyki wyraźnie maleją, co świadczy o rosnącej stabilności i zgodności estymatora największej wiarygodności. Kształt wykresów pozostaje podobny: największe błędy pojawiają się przy małych $x$, gdzie prawdopodobieństwa są najbardziej wrażliwe na niedoszacowanie $\hat \lambda$. Ponownie dostajemy potwierdzenie, że większa liczność próby poprawia jakość estymacji, co jest zgodne z Prawem Wielkich Liczb.
+
+**Wyniki dla zadania 4**
+```{r, out.width="24%", fig.show='hold', results='asis'}
+wizualizacja4(n = 20, theta = 0.5)
+wizualizacja4(n = 20, theta = 1)
+```
+
+```{r, out.width="24%", fig.show='hold', results='asis'}
+wizualizacja4(n = 20, theta = 2)
+wizualizacja4(n = 20, theta = 5)
+```
+
+```{r, out.width="24%", fig.show='hold', results='asis'}
+wizualizacja4(n = 100, theta = 0.5)
+wizualizacja4(n = 100, theta = 1)
+```
+
+```{r, out.width="24%", fig.show='hold', results='asis'}
+wizualizacja4(n = 100, theta = 2)
+wizualizacja4(n = 100, theta = 5)
+```
+
+**Komentarz:** Dla małej liczności $n=20$ histogramy są wyraźniej skośne, a QQ-plot pokazuje duże odchylenia od prostej w ogonach, co oznacza, że rozkład zmiennej $Y$ nie jest jeszcze dobrze przybliżony rozkładem normalnym dla małej próby. Po zwiększeniu liczebności do $n=100$ krzywe gęstości dużo lepiej pokrywają się z teoretyczną krzywą $N(0,1)$, a punkty na wykresach QQ-plot znacznie lepiej układają się w pobliżu prostej. Oznacza to, że zgodnie z Centralnym Twierdzeniem Granicznym przy większych próbach rozkład dąży do normalnego. 
+
+**Wyniki dla zadania 5**
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Dane do wykresow
+tab5_20 <- input5(n = 20)
+tab5_100 <- input5(n = 100)
+lo5 <- limits(tab5_20$Obciążenie, tab5_100$Obciążenie)
+lm5 <- limits(tab5_20$MSE, tab5_100$MSE)
+lw5 <- limits(tab5_20$Wariancja, tab5_100$Wariancja)
+# Wykres dla obciążenia
+obciazenie5(tab5_20, n = 20, limits = lo5)
+# Wykres dla błędu średniokwadratowego
+MSE5(tab5_20, n = 20, limits = lm5)
+# Wykres dla wariancji
+wariancja5(tab5_20, n = 20, limits = lw5)
+```
+
+```{r, out.width="33%", fig.show='hold', results='asis'}
+# Wykres dla obciążenia
+obciazenie5(tab5_100, n = 100, limits = lo5)
+# Wykres dla błędu średniokwadratowego
+MSE5(tab5_100, n = 100, limits = lm5)
+# Wykres dla wariancji
+wariancja5(tab5_100, n = 100, limits = lw5)
+```
+
+**Komentarz:** Dla $n=20$ estymatory i–iii znowu pozostają praktycznie nieobciążone i mają niewielkie (wręcz niezauważalne) MSE, natomiast obciążenie i MSE estymatora iv rosną we wszystkich konfiguracjach parametrów. Wraz ze wzrostem liczebności do $n=100$ charakterystyki estymatorów i–iii poprawiają się tylko nieznacznie, ponieważ już dla małej próby są one stabilne, a estymator iv wciąż pozostaje zdecydowanie najgorszy. Wariancja dla estymatora mediany jest najmniejsza, co potwierdza jego odporność na obserwacje skrajne.

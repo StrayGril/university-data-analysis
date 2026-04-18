@@ -1,0 +1,907 @@
+---
+title: "Modele liniowe — Raport z listy 3"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: true
+header-includes: 
+  - \renewcommand{\contentsname}{Spis Treści}
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \captionsetup{labelfont=bf, font=small}
+  - \setcounter{section}{3}
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "pdf",
+  message = FALSE,
+  fig.align = "center",
+  out.width='50%',
+  warning = FALSE)
+
+set.seed(18122025)
+library(ggplot2)
+library(kableExtra)
+library(knitr)
+```
+**Adnotacja:** Dla zapewnienia powtarzalności wyników ziarno losowe zostało ustawione na 18122025.
+\clearpage
+
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+uczniowie12 <- as.data.frame(read.table("data/tabela1_6.txt", header = FALSE))
+kopiarki34 <- as.data.frame(read.table("data/CH01PR20.txt", header = FALSE))
+stezenie58 <- as.data.frame(read.table("data/CH03PR15.txt", header = FALSE))
+```
+
+### Wstęp.
+**Chciałam zrobić krótki wstęp teoretyczny na podstawie listy, żeby później nie musieć powtarzać wszystkich wzorów, dlatego poniżej znajduje się zbiór potrzebnej teorii.**
+
+**Obliczanie współczynników w modelu liniowym.** Mamy wzór teoretyczny na estymowaną prostą regresji $\hat Y_i = \hat \beta_0 + \hat \beta_1 X_i$, gdzie $\hat \beta_1$ to nachylenie (slope), a $\hat \beta_0$ to wyraz wolny (intercept). Współczynniki obliczamy ze wzorów:
+$$\hat \beta_1 = \frac{\sum_{i=1}^{n} (X_i - \bar X)(Y_i - \bar Y)}{\sum_{i=1}^{n} (X_i - \bar X)^2}, \ \ \hat \beta_0 = \bar Y - \hat \beta_1 \bar X.$$
+Korzystamy natomiast z wbudowanych w R funkcji, których poprawność udowodniliśmy na poprzedniej liście. Liczebność próby oznaczana będzie jako $n$ natomiast warto odnotować, że w zależności od modelu czy danych, owa liczebność będzie się różnić, przez co będzie ona regularnie nadpisywana w R, choć dla uproszczenia w zadaniach będę ją zapisywać jako $n.$
+
+**Badanie zależności liniowej - F-test.** Żeby zbadać istotność liniowej zależności między dwoma zmiennymi $X$ oraz $Y$ w modelu liniowym $Y_i = \beta_0 + \beta_1X_i+e_i$, musimy przetestować hipotezy zerową $H_0: \beta_1=0$ oraz alternatywną $H_1:\beta_1 \neq 0,$ gdzie $\beta_1=0$ oznaczałaby brak korelacji.
+
+W celu zbadania hipotezy zerowej stosujemy statystykę testową:
+$$F = \frac {\text{MSM}}{\text{MSE}} = \frac{\text{SSM} / 1}{\text{SSE} / (n-2)}.$$
+Gdy zachodzi $H_0,$ statystyka ta pochodzi z rozkładu Fishera-Snedecora z $1$ i $n-2$ stopniami swobody. $H_0$ odrzucimy natomiast, jeśli $F>F_{1-\alpha,1,n-2}.$ Analogicznie p-wartość będziemy wyznaczać z $p=P(F_{1,n-2}>F)$ oraz jeśli $p<\alpha,$ to również odrzucimy $H_0.$
+
+**Wartość $\alpha$.** Wszystkie testy statystyczne oraz przedziały ufności są wyznaczane na poziomie istotności $\alpha = 0,05$ tam, gdzie nie jest wskazana inna wartość $\alpha$ w treści zadania.
+
+**Różnica między funkcjami wbudowanymi w R oraz teorią** Porównanie wartości otrzymanych z funkcji wbudowanych w R z wynikami obliczeń wykonanych na podstawie wzorów teoretycznych z zadań wskazuje, że ewentualne różnice są znikome i wynikają głównie z błędów numerycznych (zaokrągleń). Można więc bezpiecznie korzystać ze wzorów dostępnych w R bez obaw o istotne odchylenia wyników, co wykorzystuje w zadaniach, gdzie nie trzeba już obliczać oboma metodami.
+
+**Przedziały predykcyjne.** Dla nowej pojedynczej obserwacji $Y_h$ w punkcie $X = k$  90% przedział predykcyjny ma postać:
+$$\hat y_k \ \pm\ t_{0.95,n-2} \cdot s \sqrt{1 + \frac{1}{n} + \frac{(k - \bar X)^2}{\sum_{i=1}^{n}(X_i - \bar X)^2}},$$
+gdzie $s^2 = \frac{SSE}{n-2}$ to estymator wariancji.
+
+**Badanie zależności liniowej - t-test.** Wiemy z teorii, że w regresji prostej zachodzi zależność $F = t^2,$ dlatego test t jest równoważny testowi F istotności regresji. Rozważamy hipotezy $H_0: \beta_1 = 0,$ oznaczającą brak zależności między zmiennymi, oraz $H_1: \beta_1 \neq 0.$ Statystykę testową obliczamy ze wzoru:
+$$t = \frac{\hat \beta_1 - 0}{s(\hat\beta_1)},$$
+gdzie $s(\hat\beta_1)$ oznacza błąd standardowy estymatora współczynnika nachylenia. Przy spełnieniu założeń modelu statystyka t ma rozkład Studenta z $n-2$ stopniami swobody. Hipotezę zerową odrzucamy, gdy $|t| > t_{1-\alpha/2, n-2}$ lub równoważnie, gdy p-wartość testu jest mniejsza od przyjętego poziomu istotności $\alpha.$
+
+## Zadanie 1.
+
+```{r}
+colnames(uczniowie12) <- c("Id", "GPA", "IQ", "sex", "PH")
+```
+
+**a) Użyj prostego modelu regresji, aby opisać zależność GPA od wyników testu IQ. Podaj odpowiednie równanie regresji. Przedstaw dane i prostą regresji na wykresie. Oblicz współczynnik determinacji $R^2$ za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R. Co można wywnioskować o danych na podstawie statystyki $R^2$?**
+
+**Teoria:** Niech $\hat Y_i$ będzie zmienną opisywaną zawierającą przybliżone i-te GPA, a $X_i$ będzie zmienną opisującą zawierającą odpowiadający i-ty wynik IQ, gdzie $i=1,\ldots,n,$ wtedy równanie wygląda następująco:
+
+```{r}
+# Informacje o modelu
+model1 <- lm(GPA ~ IQ, data = uczniowie12, na.action = na.omit)
+s <- summary(model1)
+
+# Równanie regresji
+b0 <- coef(model1)[1]
+b1 <- coef(model1)[2]
+
+# Wzór: R^2 = SSM / SST
+y <- model1$model$GPA
+yhat <- fitted(model1)
+
+SSM <- sum( (yhat - mean(y))^2 )
+SST <- sum( (y - mean(y))^2 )
+
+R2_manual <- SSM / SST
+
+R2_R <- summary(model1)$r.squared
+R2_dif <- R2_manual - R2_R
+```
+
+Z modelu otrzymujemy równanie regresji:
+\[ \hat Y_i = `r round(b0, 3)` + `r round(b1, 3)` X_i \]
+oraz współczynnik determinacji:
+\[ R^2 = \frac{SSM}{SST} = `r round(R2_manual, 3)`, \]
+gdzie różnica między wynikiem z R i obliczeniami teoretycznymi wynosi:
+\[ \approx 5.55 \times 10^{-17}. \]
+
+```{r}
+# Wykres danych + linia regresji 
+plot(uczniowie12$IQ, uczniowie12$GPA, pch = 19, xlab = "IQ", ylab = "GPA", 
+     main = "GPA a IQ") 
+abline(model1, col = "red", lwd = 2)
+```
+
+**Komentarz:** Współczynnik $R^2=0.402$ oznacza umiarkowane dopasowanie, czyli model z samym IQ wyjaśnia ok. 40% zmienności GPA. Oznacz to, że IQ jest istotnym predyktorem, ale ponad połowa zróżnicowania GPA pozostaje niewyjaśniona. To samo widzimy również na wykresie - zależność liniowa nie jest najsilniejsza, bo punkty mają duży rozrzut wokół prostej.
+
+**b) Przetestuj hipotezę, że GPA nie jest skorelowane z IQ na podstawie testu F. Podaj testowaną hipotezę, statystykę testową z liczbą stopni swobody, p-wartość oraz własne wnioski. Oblicz statystykę F oraz p-wartość za pomocą wzoru teoretycznego oraz funkcji wbudowanych w R.**
+
+**Teoria:** Zgodnie z założeniami z podpunktu a) oraz teorią chcemy zbadać czy w modelu $Y_i = \beta_0 + \beta_1X_i+e_i,$ mamy $H_0: \beta_1=0$ kontra $H_1:\beta_1 \neq 0.$ 
+
+```{r}
+# Hipotezy: H0: beta1 = 0 vs H1: beta1 != 0
+alpha <- 0.05 # globalnie ustawiony na podstawie teorii
+
+# Statystyka F z R:
+F_R  <- round(s$fstatistic["value"], 3)
+df1_R <- s$fstatistic["numdf"]   # df = 1
+df2_R <- s$fstatistic["dendf"]   # df = n-2 = 76
+p_R <- round(pf(F_R, df1_R, df2_R, lower.tail = FALSE), 3)
+
+# Teoretyczna
+y <- model1$model$GPA
+yhat <- fitted(model1)
+
+SSM <- sum((yhat - mean(y))^2)
+SSE <- sum((y - yhat)^2)
+
+n <- sum(complete.cases(uczniowie12$GPA, uczniowie12$IQ)) #nrow moze liczyc tez na
+df1 <- 1
+df2 <- n - 2
+
+F_manual <- round( (SSM/df1) / (SSE/df2), 3)
+Fcrit <- round(qf(1 - alpha, df1 = df1, df2 = df2), 3)
+p_manual <- round(pf(F_manual, df1, df2, lower.tail = FALSE), 3)
+
+wyniki <- data.frame(
+  "Statystyka F" = c(F_R, F_manual),
+  "df1" = c(df1, df1),
+  "df2" = c(df2, df2),
+  "p-wartość" = c(p_R, p_manual),
+  "F(1,n-2)" = c(Fcrit, Fcrit),
+  row.names = c("R", "Teoria"),
+  check.names = FALSE)
+```
+
+```{r}
+kable(wyniki, caption = "Wyniki testu statystycznego")
+```
+
+**Komentarz:** Ponieważ $F > F_{1-\alpha,1,n-2},$ odrzucamy $H_0,$ co oznacza, że istnieje istotna statystycznie zależność liniowa między GPA oraz IQ.
+
+**c) Przewiduj GPA dla uczniów, których IQ wynosi 75, 100, 140. Podaj 90% przedziały predykcyjne.**
+
+```{r}
+# Nowe obserwacje
+nowe_IQ <- data.frame(IQ = c(75, 100, 140))
+
+# 90% pp dla predykcji GPA z wykorzystaniem R
+pred_90 <- predict(
+  model1,
+  newdata = nowe_IQ,        # dane dla ktory liczymy
+  interval = "prediction", # przedzial liczony przez r
+  level = 0.90             # poziom przedzialu
+)
+
+dolna_granica <- pred_90[, "lwr"]
+gorna_granica <- pred_90[, "upr"]
+```
+
+**Odpowiedź:** 90% przedziały predykcyjne przyjmują postać:
+
+\[ \text{dla IQ = 75:  }[`r round(dolna_granica[1], 3)`, `r round(gorna_granica[1], 3)`] \]
+\[ \text{dla IQ = 100: }[`r round(dolna_granica[2], 3)`, `r round(gorna_granica[2], 3)`] \]
+\[ \text{dla IQ = 140: }[`r round(dolna_granica[3], 3)`, `r round(gorna_granica[3], 3)`] \]
+
+**d) Dodaj do wykresu z danymi 90% przedziały predykcyjne. Ile obserwacji znajduje się poza tymi przedziałami?**
+
+```{r}
+# Siatka wartości IQ do narysowania przedziałów
+IQ_grid <- seq(min(uczniowie12$IQ), max(uczniowie12$IQ), length.out = 200)
+grid_df <- data.frame(IQ = IQ_grid)
+
+# 90% pp dla siatki
+ppred <- predict(model1, newdata = grid_df, interval = "prediction", level = 0.90)
+
+# Wykres
+plot(uczniowie12$IQ, uczniowie12$GPA, pch = 19, xlab = "IQ", ylab = "GPA",
+  main = "GPA a IQ – 90% PP")
+abline(model1, col = "red", lwd = 2)
+lines(IQ_grid, ppred[, "lwr"], lty = 2)
+lines(IQ_grid, ppred[, "upr"], lty = 2)
+
+# Obserwacje poza przedziałami
+obs_poza <- predict(model1, interval = "prediction", level = 0.90)
+obs_poza_liczba <- sum(uczniowie12$GPA < obs_poza[, "lwr"] | uczniowie12$GPA > obs_poza[, "upr"])
+```
+
+Ilość obserwacji znajdujących się poza przedziałami predykcyjnymi wynosi: 
+\[`r obs_poza_liczba`,\]
+co stanowi 7,69% wszystkich obserwacji. Oznacza to, że około 92% danych znajduje się wewnątrz 90% przedziałów predykcyjnych, co jest zgodne w przybliżeniu z założonym poziomem ufności z uwzględnieniem losowej zmienności próby.
+
+## Zadanie 2.
+**a) Użyj prostego modelu regresji, aby opisać zależność GPA od wyników testu PH. Podaj odpowiednie równanie regresji. Przedstaw dane i prostą regresji na wykresie. Oblicz współczynnik determinacji $R^2$. Co można wywnioskować o danych na podstawie statystyki $R^2$?**
+**Teoria.** Tym razem $\hat Y_i$ ponownie będzie zmienną opisywaną zawierającą przybliżone i-te GPA, a $X_i$ zmienną opisującą zawierającą i-ty wynik testy PH, gdzie $i=1,\ldots ,n.$
+
+```{r}
+# Model regresji GPA ~ PH
+model2 <- lm(GPA ~ PH, data = uczniowie12, na.action = na.omit)
+b0 <- coef(model2)[1]
+b1 <- coef(model2)[2]
+
+# R^2 z definicji
+y <- uczniowie12$GPA
+yhat <- fitted(model2)
+
+SSM <- sum((yhat - mean(y))^2)
+SST <- sum((y - mean(y))^2)
+
+R2_manual <- SSM / SST
+
+# R^2 z R
+R2_R <- summary(model2)$r.squared
+R2_dif <- R2_manual - R2_R
+```
+
+Z modelu otrzymujemy równanie regresji:
+\[ \hat Y_i = `r round(b0, 3)` + `r round(b1, 3)` X_i \]
+oraz współczynnik determinacji:
+\[ R^2 = \frac{SSM}{SST} = `r round(R2_manual, 3)`, \]
+gdzie różnica między wynikiem z R i obliczeniami teoretycznymi wynosi:
+\[ \approx 5.55 \times 10^{-17}. \]
+
+```{r}
+# Wykres danych i prosta regresji
+plot(uczniowie12$PH, uczniowie12$GPA, pch = 19, xlab = "PH", ylab = "GPA",
+  main = "GPA a PH")
+abline(model2, col = "red", lwd = 2)
+```
+**Komentarz:** Ponownie widzimy, że $R^2$ jest niewielkie, nawet mniejsze niż w przypadku modelu z zależnością od IQ, ponieważ w tym przypadku model z samym PH wyjaśnia jedynie ok. 29% zmienności wewnątrz GPA. Oznacza to, że IQ jest lepszą zmienną objaśniającą. Na wykresie możemy również zauważyć słabą liniowość i rozrzucenie danych.
+
+**b) Przetestuj hipotezę, że GPA nie jest skorelowane z PH na podstawie testu F. Podaj testowaną hipotezę, statystykę testową z liczbą stopni swobody, p-wartość oraz własne wnioski.**
+**Komentarz:** Test wykonujemy analogicznie jak w zadaniu 1b.
+
+```{r}
+# Statystyka F z R
+s2 <- summary(model2)
+
+F_R  <- round(s2$fstatistic[1], 3)
+df1_R <- s2$fstatistic[2]
+df2_R <- s2$fstatistic[3]
+p_R <- round(pf(F_R, df1_R, df2_R, lower.tail = FALSE), 3)
+
+# Teoretyczna
+y <- uczniowie12$GPA
+yhat <- fitted(model2)
+
+SSM <- sum((yhat - mean(y))^2)
+SSE <- sum((y - yhat)^2)
+
+n <- length(residuals(model2))
+df1 <- 1
+df2 <- n - 2
+
+F_manual <- round((SSM / df1) / (SSE / df2), 3)
+p_manual <- round(pf(F_manual, df1, df2, lower.tail = FALSE), 3)
+Fcrit <- round(qf(1 - alpha, df1 = df1, df2 = df2), 3)
+
+wyniki <- data.frame(
+  "Statystyka F" = c(F_R, F_manual),
+  "df1" = c(df1, df1),
+  "df2" = c(df2, df2),
+  "p-wartość" = c(p_R, p_manual),
+  "F(1,n-2)" = c(Fcrit, Fcrit),
+  row.names = c("R", "Teoria"),
+  check.names = FALSE)
+```
+
+```{r}
+kable(wyniki, caption = "Wyniki testu statystycznego")
+```
+**Komentarz:** Odrzucamy $H_0,$ co oznacza, że istnieje liniowa zależność między GPA i PH.
+
+**c) Przewiduj wyniki GPA dla uczniów, których wynik testu PH wynosi 25, 55, 85. Podaj 90% przedziały predykcyjne.**
+
+```{r}
+new_PH <- data.frame(PH = c(25, 55, 85))
+pred_90 <- predict(model2, newdata = new_PH, interval = "prediction", level = 0.90)
+dolna_granica <- pred_90[, "lwr"]
+gorna_granica <- pred_90[, "upr"]
+```
+**Odpowiedź:** 90% przedziały predykcyjne przyjmują postać:
+
+\[ \text{dla PH = 25: }[`r round(dolna_granica[1], 3)`, `r round(gorna_granica[1], 3)`] \]
+\[ \text{dla PH = 55: }[`r round(dolna_granica[2], 3)`, `r round(gorna_granica[2], 3)`] \]
+\[ \text{dla PH = 85: }[`r round(dolna_granica[3], 3)`, `r round(gorna_granica[3], 3)`] \]
+
+
+**d) Dodaj do wykresu z danymi 90% przedziały predykcyjne. Ile obserwacji znajduje się poza tymi przedziałami?**
+
+```{r}
+# PP
+PH_grid <- seq(min(uczniowie12$PH), max(uczniowie12$PH), length.out = 200)
+grid_df <- data.frame(PH = PH_grid)
+ppred_PH <- predict(model2, newdata = grid_df, interval = "prediction", level = 0.90)
+
+# Wykres
+plot(uczniowie12$PH, uczniowie12$GPA, pch = 19, xlab = "PH", ylab = "GPA",
+  main = "GPA a PH – 90% PP")
+abline(model2, col = "red", lwd = 2)
+lines(PH_grid, ppred_PH[, "lwr"], lty = 2)
+lines(PH_grid, ppred_PH[, "upr"], lty = 2)
+
+# Liczba obserwacji poza przedziałami
+obs_poza_PH <- predict(model2, interval = "prediction", level = 0.90)
+obs_poza_PH_liczba <- sum(uczniowie12$GPA < obs_poza_PH[, "lwr"] | uczniowie12$GPA > obs_poza_PH[, "upr"])
+```
+
+Ilość obserwacji znajdujących się poza przedziałami predykcyjnymi wynosi: 
+\[`r obs_poza_PH_liczba`,\]
+co stanowi 7,69% wszystkich obserwacji. Oznacza to, że około 92% danych znajduje się wewnątrz 90% przedziałów predykcyjnych, co zgadza się w przybliżeniu z założonym poziomem ufności z uwzględnieniem losowej zmienności próby.
+
+**e) Która z dwóch zmiennych — wynik testu IQ czy wynik testu PH — jest lepszym predyktorem GPA?**
+
+Model z IQ wyjaśnia zauważalnie większą część zmienności GPA niż model z PH na co wskazuje różnica w wartościach $R^2$. Pozostałe z danych jak między innymi długość przedziałów predykcyjnych, liczba obserwacji oraz odsetek danych poza tymi przedziałami oraz wyniki testu statystycznego F dają podobne wyniki dla obu zmiennych.
+
+## Zadanie 3.
+
+```{r}
+colnames(kopiarki34) <- c("time", "amount")
+```
+
+**a) Sprawdź, czy suma residuów wynosi zero.**
+
+```{r}
+# Model regresji amount ~ time
+model3 <- lm(amount ~ time, data = kopiarki34)
+res <- residuals(model3) # residua
+sum_res <- sum(res) # suma
+```
+
+Suma residuów wynosi:
+\[`r sum_res`,\]
+co w przybliżeniu daje nam 0.
+
+**b) Przedstaw wykres residuów względem zmiennej objaśniającej i krótko omów wykres, zwracając uwagę na jakiekolwiek nietypowe wzory lub punkty.**
+
+```{r}
+# Wykres
+plot(kopiarki34$time, res, pch = 19, xlab = "czas", ylab = "residua",
+  main = "Reszty a czas")
+abline(h = 0, col = "red", lwd = 2)
+```
+**Komentarz:** Na wykresie można zauważyć delikatnie falistą strukturę, przypominającą fragment funkcji okresowej (np. cosinusa), jednak efekt ten jest na tyle słaby, że nie pozwala jednoznacznie stwierdzić naruszenia założenia losowości residuów. Poza tym obserwacje są w przybliżeniu losowo i równomiernie rozproszone wokół zera, co sugeruje spełnienie założenia liniowości modelu. Dla wartości czasu powyżej 100 widocznych jest kilka obserwacji odstających, które potencjalnie mogą mieć zwiększony wpływ na estymację modelu.
+
+**c) Przedstaw wykres residuów względem kolejności pojawiania się obserwacji w pliku danych i krótko omów wykres, zwracając uwagę na jakiekolwiek nietypowe wzory lub punkty.**
+
+```{r}
+# Indeks obserwacji / kolejność
+idx <- seq_along(res)
+
+# Wykres
+plot(idx, res, pch = 19, xlab = "Numer obserwacji", ylab = "residua",
+  main = "Reszty a kolejność obserwacji")
+abline(h = 0, col = "red", lwd = 2)
+```
+**Komentarz:** Na powyższym wykresie residuów nie widać wyraźnego trendu ani regularnych struktur, co sugeruje brak silnej korelacji oraz spełnienie założenia niezależności błędów. Punkty są w przybliżeniu losowo rozproszone wokół zera, bez systematycznego wzrostu lub spadku wariancji. Widoczne są pojedyncze obserwacje o większych wartościach bezwzględnych residuów, jednak nie tworzą one spójnych klastrów, które mogłyby wskazywać na istotne naruszenie założeń modelu.
+
+**d) Sprawdź rozkład residuów za pomocą histogramu i wykresu kwantylowo-kwantylowego. Jakie są wnioski?**
+
+```{r}
+# Histogram reszt
+par(mfrow = c(1, 2))
+hist(res, probability = TRUE, breaks = 20, xlab = "residua", main = "Histogram reszt")
+x <- seq(min(res), max(res), length.out = 200)
+lines(x, col = "red", dnorm(x, mean = mean(res), sd = sd(res)), lwd = 2)
+lines(density(res), lwd = 2)
+
+# Wykres QQ (sprawdzenie normalności)
+qqnorm(res, pch = 19)
+qqline(res, col = "red", lwd = 2)
+par(mfrow = c(1, 1))
+
+swtest <- shapiro.test(res)
+```
+**Komentarz:** Choć wygląd histogramu oraz wykresu Q–Q może sugerować pewne odchylenia od normalności rozkładu residuów, to nałożenie na histogram krzywych gęstości oraz wynik testu Shapiro–Wilka nie potwierdzają istotnych naruszeń tego założenia. Otrzymana p-wartość $p=0.1338>0.05$ nie daje podstaw do odrzucenia hipotezy o normalności residuów, w związku z czym założenie o normalności błędów w modelu można uznać za spełnione.
+
+## Zadanie 4.
+**Zmodyfikuj dane pliku ch01pr20.txt, dodając dodatkową obserwację (1000, 2).**
+
+```{r}
+kopiarki34_2 <- rbind( kopiarki34, data.frame(time = 1000, amount = 2) )
+```
+
+**a) Przeprowadź regresję ze zmienionymi danymi i utwórz tabelę porównującą wyniki tej analizy z wynikami analizy oryginalnych danych. W tabeli należy podać: dopasowane równanie regresji, t-test dla nachylenia wraz z p-wartością, $R^2$ oraz estymator $\sigma^2$. Krótko omów różnice.**
+```{r}
+# Regresje
+model_przed <- lm(amount ~ time, data = kopiarki34)
+model_po <- lm(amount ~ time, data = kopiarki34_2)
+
+# Wyniki - przed
+coef_oryg <- coef(model_przed)
+t_oryg <- round(summary(model_przed)$coefficients["time", "t value"], 3)
+p_oryg <- round(summary(model_przed)$coefficients["time", "Pr(>|t|)"], 3)
+R2_oryg <- round(summary(model_przed)$r.squared, 3)
+sigma2_oryg <- round(summary(model_przed)$sigma^2, 3)
+
+# Wyniki – po
+coef_mod <- coef(model_po)
+t_mod <- round(summary(model_po)$coefficients["time", "t value"], 3)
+p_mod <- round(summary(model_po)$coefficients["time", "Pr(>|t|)"], 3)
+R2_mod <- round(summary(model_po)$r.squared, 3)
+sigma2_mod <- round(summary(model_po)$sigma^2, 3)
+
+df_oryg <- model_przed$df.residual
+df_mod <- model_po$df.residual
+tcrit_oryg <- round(qt(1 - alpha/2, df = df_oryg), 3)
+tcrit_mod  <- round(qt(1 - alpha/2, df = df_mod), 3)
+
+# Tabela
+porownanie <- data.frame(
+  Dane = c("Przed", "Po"),
+  "Równanie" = c(
+    paste0("Y = ", round(coef_oryg[1], 3), " + ", round(coef_oryg[2],3), "X"),
+    paste0("Y = ", round(coef_mod[1], 3 ), " + ", round(coef_mod[2], 3), "X")),
+  "Statystyka T" = c(t_oryg, t_mod),
+  "p-wartość" = c(p_oryg, p_mod),
+  "R2" = c(R2_oryg, R2_mod),
+  "Estymator" = c(sigma2_oryg, sigma2_mod),
+  "t*" = c(tcrit_oryg, tcrit_mod),
+  check.names = FALSE
+)
+```
+
+```{r}
+kable(porownanie, caption = "Porównanie modelu przed i po dodaniu nowej obserwacji (1000,2)")
+```
+**Komentarz:** Dodanie nowej obserwacji $(1000, 2)$ prowadzi do zasadniczej zmiany wyników regresji: przed modyfikacją danych model wykazywał bardzo silną i istotną zależność liniową (wysokie $R^2 = 0,957$, $|t| > t^*$, gdzie $t*$ to wartość krytyczna, oraz p-wartość bliska zeru). Po dodaniu obserwacji nachylenie prostej ulega znacznemu spłaszczeniu, współczynnik determinacji spada do $R^2 = 0,017$, a statystyka $t$ nie przekracza wartości krytycznej, co oznacza brak podstaw do odrzucenia hipotezy o braku zależności liniowej. Jednocześnie silny wzrost estymatora $\sigma^2$ wskazuje na istotne pogorszenie dopasowania modelu, co potwierdza dużą wrażliwość regresji liniowej na pojedyncze odstające obserwacje.
+
+**b) Powtórz punkty (b), (c) i (d) z zadania 3 na zmodyfikowanym zbiorze danych i pokaż nietypową obserwację na każdym z wykresów.**
+
+```{r, fig.width=12, fig.height=4, out.width='70%'}
+### b) wykres residuów względem zmiennej objaśniającej
+# Regresja dla zmodyfikowanych danych
+model_mod <- lm(amount ~ time, data = kopiarki34_2)
+res_mod <- residuals(model_mod) # Reszty modelu
+
+# Wykres
+par(mfrow = c(1, 2))
+plot(kopiarki34_2$time, res_mod, pch = 19, xlab = "czas", ylab = "residua",
+  main = "Reszty a czas dla nowej obserwacji (1000, 2)")
+abline(h = 0, col = "red", lwd = 2)
+points(1000, res_mod[nrow(kopiarki34_2)], col = "blue", pch = 19)
+
+### c) Wykres residuów względem kolejności
+plot(seq_along(res_mod), res_mod, pch = 19, xlab = "numer", ylab = "residua",
+  main = "Reszty a kolejność dla nowej obserwacji (1000, 2)")
+abline(h = 0, col = "red", lwd = 2)
+points(nrow(kopiarki34_2), res_mod[nrow(kopiarki34_2)], col = "blue", pch = 19)
+par(mfrow = c(1, 1))
+```
+```{r}
+### d) Histogram reszt i wykres QQ
+par(mfrow = c(1, 2))
+hist(res_mod, probability = TRUE, breaks = 20, xlab = "residua", main = "Histogram reszt")
+x <- seq(min(res_mod), max(res_mod), length.out = 200)
+lines(x, col = "red", dnorm(x, mean = mean(res_mod), sd = sd(res_mod)), lwd = 2)
+lines(density(res_mod), lwd = 2)
+
+qqnorm(res_mod, pch = 19, main = "Q–Q plot reszt")
+qqline(res_mod, col = "red", lwd = 2)
+
+# Zaznaczenie nietypowej obserwacji na QQ
+points(
+  qqnorm(res_mod, plot.it = FALSE)$x[nrow(kopiarki34_2)],
+  sort(res_mod)[nrow(kopiarki34_2)],
+  col = "blue", pch = 19)
+par(mfrow = c(1, 1))
+```
+**Komentarz:** Wykresy pokazują, że po dodaniu obserwacji $(1000, 2)$ struktura residuów ulega zaburzeniu. Na wykresach residuów względem czasu oraz kolejności widoczna jest nasza obserwacja skrajna, która silnie odstaje od pozostałych punktów. Histogram reszt przestaje przypominać rozkład normalny, a wykres Q-Q ujawnia istotne odchylenia od linii prostej, szczególnie w ogonach rozkładu. Wyniki te potwierdzają, że pojedyncza obserwacja odstająca znacząco narusza założenia klasycznego modelu regresji liniowej.
+
+**c) Zmodyfikuj początkowy plik ch01pr20.txt w inny sposób, dodając obserwację (1000, 6), i powtórz analizę z kroków (a) i (b). Porównaj wyniki.**
+
+```{r}
+kopiarki34_3 <- rbind(kopiarki34, data.frame(time = 1000, amount = 6))
+model_po2 <- lm(amount ~ time, data = kopiarki34_3)
+
+### a) Regresja i tabela porównawcza
+# Wyniki – przed
+coef_oryg <- coef(model_przed)
+t_oryg <- round(summary(model_przed)$coefficients["time", "t value"], 3)
+p_oryg <- round(summary(model_przed)$coefficients["time", "Pr(>|t|)"], 3)
+R2_oryg <- round(summary(model_przed)$r.squared, 3)
+sigma2_oryg <- round(summary(model_przed)$sigma^2, 3)
+
+# Wyniki – pro
+coef_mod2 <- coef(model_po2)
+t_mod2 <- round(summary(model_po2)$coefficients["time", "t value"], 3)
+p_mod2 <- round(summary(model_po2)$coefficients["time", "Pr(>|t|)"], 3)
+R2_mod2 <- round(summary(model_po2)$r.squared, 3)
+sigma2_mod2 <- round(summary(model_po2)$sigma^2, 3)
+
+df_oryg <- model_przed$df.residual
+df_mod <- model_po2$df.residual
+tcrit_oryg <- round(qt(1 - alpha/2, df = df_oryg), 3)
+tcrit_mod  <- round(qt(1 - alpha/2, df = df_mod), 3)
+
+# Tabela porównawcza
+porownanie_2 <- data.frame(
+  Dane = c("Przed", "Po"),
+  "Równanie" = c(
+    paste0("Y = ", round(coef_oryg[1], 3), " + ", round(coef_oryg[2], 3),"X"),
+    paste0("Y = ", round(coef_mod2[1], 3), " + ", round(coef_mod2[2], 3), "X")),
+  "Statystyka T" = c(t_oryg, t_mod2),
+  "p-wartość" = c(p_oryg, p_mod2),
+  "R2" = c(R2_oryg, R2_mod2),
+  "Estymator" = c(sigma2_oryg, sigma2_mod2),
+  "t*" = c(tcrit_oryg, tcrit_mod),
+  check.names = FALSE
+)
+
+kable(porownanie_2, caption = "Porównanie modelu przed i po dodaniu nowej obserwacji (1000,6)")
+```
+
+```{r, fig.width=12, fig.height=4, out.width='70%'}
+### b) Analiza residuów dla danych zmodyfikowanych
+res_mod2 <- residuals(model_po2)
+
+# Reszty a czas
+par(mfrow = c(1, 2))
+plot(kopiarki34_3$time, res_mod2, pch = 19, xlab = "czas", ylab = "residua",
+  main = "Reszty a czas dla nowej obserwacji (1000, 6)")
+abline(h = 0, col = "red", lwd = 2)
+points(1000, res_mod2[nrow(kopiarki34_3)], col = "blue", pch = 19)
+
+# Reszty a kolejność
+idx <- seq_along(res_mod2)
+plot(idx, res_mod2, pch = 19, xlab = "numer", ylab = "residua",
+  main = "Reszty a kolejność dla nowej obserwacji (1000, 6)")
+abline(h = 0, col = "red", lwd = 2)
+points(nrow(kopiarki34_3), res_mod2[nrow(kopiarki34_3)], col = "red", pch = 19)
+par(mfrow = c(1, 1))
+```
+
+
+```{r}
+# Histogram reszt
+par(mfrow = c(1, 2))
+hist(res_mod2, breaks = 10, xlab = "residua", main = "Histogram reszt (1000, 6)")
+x <- seq(min(res_mod2), max(res_mod2), length.out = 200)
+lines(x, col = "red", dnorm(x, mean = mean(res_mod2), sd = sd(res_mod2)), lwd = 2)
+lines(density(res_mod2), lwd = 2)
+
+# Wykres QQ
+qqnorm(res_mod2, pch = 19, main = "Q–Q plot reszt (1000,6)")
+qqline(res_mod2, lwd = 2)
+par(mfrow = c(1, 1))
+```
+**Komentarz:** Dodanie obserwacji $(1000, 6)$ nadal istotnie wpływa na wyniki regresji, jednak efekt ten jest słabszy niż w przypadku obserwacji $(1000, 2)$. Nachylenie prostej regresji ulega wyraźnemu zmniejszeniu, a współczynnik determinacji spada z $R^2 = 0,957$ do $R^2 = 0,112$, co wskazuje na znaczne pogorszenie dopasowania modelu. Mimo to statystyka $t = 2,359$ przekracza wartość krytyczną $t^* \approx 2,015$, a p-wartość pozostaje mniejsza od $0,05$, co oznacza, że nachylenie nadal jest istotne statystycznie. Jednocześnie istotny wzrost estymatora $\sigma^2$ oraz widoczne zaburzenia na wykresach potwierdzają, że obserwacja nawet lżej odstająca znacząco osłabia stabilność i jakość dopasowania modelu regresji liniowej.
+
+## Zadanie 5.
+
+```{r}
+colnames(stezenie58) <- c("concentration", "time")
+```
+
+**a) Przeprowadź regresję liniową z czasem jako zmienną objaśniającą i stężeniem roztworu jako zmienną odpowiedzi. Podaj odpowiednie równanie regresji. Przedstaw dane i prostą regresji na wykresie. Dodaj do wykresu 95% przedziały predykcyjne dla poszczególnych obserwacji. Jakie są wnioski?**
+
+```{r}
+model5 <- lm(concentration ~ time, data = stezenie58)
+b0 <- coef(model5)[1]
+b1 <- coef(model5)[2]
+```
+
+Z modelu otrzymujemy równanie regresji:
+\[ \hat Y_i = `r round(b0, 3)` + `r round(b1, 3)` X_i , \]
+gdzie $X_i$ to wynik i-tego czasu, a $\hat Y_i$ to estymowane stężenie roztworu dla tego czasu.
+
+```{r}
+pred_95 <- predict(model5, interval = "prediction", level = 0.95)
+
+# Wykres
+plot(stezenie58$time, stezenie58$concentration, pch = 19, xlab = "czas", ylab = "stężenie",
+  main = "Stężenie a czas")
+abline(model5, col = "red", lwd = 2)
+ord <- order(stezenie58$time)
+lines(stezenie58$time[ord], pred_95[ord, "lwr"], lty = 2)
+lines(stezenie58$time[ord], pred_95[ord, "upr"], lty = 2)
+```
+**Komentarz:** Estymowany model liniowy wskazuje na malejącą zależność stężenia roztworu od czasu, co jest zgodne z intuicyjnym oczekiwaniem dla fizycznego procesu rozcieńczania. Na wykresie z 95% przedziałami predykcyjnymi niemal wszystkie obserwacje mieszczą się wewnątrz przedziałów, co sugeruje poprawne oszacowanie predykcji oraz brak znaczących obserwacji odstających. Jednocześnie widoczny rozrzut punktów wokół prostej regresji sugeruje, że model liniowy jedynie przybliża rzeczywistą zależność stężenia od czasu, ale jej nie wyjaśnia w pełni.
+
+**b) Podsumuj wyniki regresji, podając wartość $R^2$ i wyniki testu istotności dla hipotezy zerowej, że stężenie roztworu nie zależy od czasu (podaj hipotezę zerową i alternatywną w odniesieniu do parametrów modelu, statystykę testową ze stopniami swobody, p-wartość i krótki wniosek).**
+
+```{r}
+# Podsumowanie modelu
+s5 <- summary(model5)
+R2 <- s5$r.squared
+
+# Wyniki
+F_stat <- s5$fstatistic[1]
+df1 <- s5$fstatistic[2]
+df2 <- s5$fstatistic[3]
+Fcrit <- round(qf(1 - alpha, df1 = df1, df2 = df2), 3)
+p_wartosc <- pf(F_stat, df1, df2, lower.tail = FALSE)
+```
+
+Z modelu otrzymujemy współczynnik determinacji:
+\[ R^2 = `r round(R2, 3)`. \]
+
+Testujemy hipotezę zerową $H_0: \beta_1=0$ (stężenie nie zależy od czasu) oraz alternatywną $H_1: \beta_1 \neq 0$ przy wykorzystaniu statystyki F. Z informacji o modelu otrzymujemy:
+\[ F = `r round(F_stat, 3)` > `r round(Fcrit, 3)` = F_{1 - `r alpha`, `r df1`,`r df2`} . \]
+Dodatkowo otrzymujemy:
+\[ \text{p-wartość} = `r round(p_wartosc, 3)` < `r alpha` = \alpha \]
+**Wniosek:** Na podstawie obu powyższych wyników testu statystycznego odrzucamy $H_0,$ czyli wiemy, że stężenie zależy od czasu. Dodatkowo wartość $R^2$ mówi nam o tym, że 81% zmienności w stężeniu może zostać wytłumaczona przy pomocy czasu.
+
+**c) Oblicz współczynnik korelacji między obserwowaną i przewidywaną wartością stężenia roztworu.**
+**Teoria** Współczynnik korelacji Pearsona obliczamy ze wzoru:
+$$r_{Y,\hat Y}= \frac{\sum_{i=1}^{n}(Y_i-\bar Y)(\hat Y_i-\overline{\hat Y})}{\sqrt{\sum_{i=1}^{n}(Y_i-\bar Y)^2} \sqrt{\sum_{i=1}^{n}(\hat Y_i-\overline{\hat Y})^2}}$$
+lub wykorzystując funkcję wbudowaną w R - cor($Y,\hat Y$).
+
+```{r}
+y_obs <- stezenie58$concentration # Wartości obserwowane
+y_hat <- fitted(model5)           # Wartości przewidywane z modelu
+korelacja <- cor(y_obs, y_hat)
+```
+
+Współczynnik korelacji wynosi:
+\[ `r round(korelacja, 3)` . \]
+Oznacza to, że model w znacznym stopniu opisuje zmienność stężenia w czasie, a pozostała część zmienności wynika albo z czynników, które nie są uwzględnione w modelu, albo z losowości. 
+
+## Zadanie 6.
+**Użyj procedury Box–Cox, aby znaleźć odpowiednią transformację dla stężenia roztworu.**
+**Teoria:** Transformacja Boxa-Coxa polega na wyborze parametru $\lambda$ dla optymalnego przekształcenia w celu poprawienia spełnienia założeń klasycznego modelu regresji liniowej, czyli np. poprawienia normalności residuów. Transformacja ta dana jestwzorem:
+$$ Y^{\lambda} = \begin{cases}
+\dfrac{Y^\lambda - 1}{\lambda}, & \lambda \neq 0, \\[6pt]
+\ln(Y), & \lambda = 0,
+\end{cases}$$
+
+```{r}
+library(MASS)
+
+# Procedura Box–Cox
+model_bc <- lm(concentration ~ time, data = stezenie58)
+bc <- boxcox(model_bc)
+lambda <- bc$x[which.max(bc$y)]
+ci <- bc$x[bc$y > max(bc$y) - qchisq(0.95, 1)/2] #teoretyczne
+pu <- range(ci)
+```
+**Komentarz:** Po wykonaniu procedury przy użycia polecenia boxcox() z pakietu MASS otrzymaliśmy:
+\[ \lambda = `r round(lambda, 3)` , \]
+która maksymalizuje log-wiarygodność modelu. Ponieważ nasza wartość $\lambda$ jest bliska 0 możemy zastosować jedno z dwóch przekształceń to znaczy albo $\overset{\sim}{Y} = \frac{Y^{0.02} - 1}{0.02},$ albo $\overset{\sim}{Y} = \log(Y).$ Jeżeli dodatkowo sprawdzi się przedziały ufności dla $\lambda,$ to zauważymy, że 0 jest w nich zawarte, więc bezpieczniejszym wyborem jest $\overset{\sim}{Y} = \log(Y).$
+
+## Zadanie 7.
+**a) Utwórz nową zmienną odpowiedzi, biorąc logarytm stężenia roztworu (zdefiniuj $\tilde Y = \log(Y)$).**
+
+```{r}
+stezenie58$log_concentration <- log(stezenie58$concentration)
+```
+
+**b) Powtórz zadanie 5 z $\tilde Y$ jako zmienną odpowiedzi i czasem jako zmienną objaśniającą ($\tilde Y \sim \text{time}$). Podsumuj swoje wyniki.**
+
+```{r}
+model7 <- lm(log_concentration ~ time, data = stezenie58)
+b0 <- coef(model7)[1]
+b1 <- coef(model7)[2]
+```
+Otrzymujemy równanie regresji:
+\[ \hat Y_i = `r round(b0, 3)` + `r round(b1, 3)` X_i \]
+
+```{r}
+# PP
+pred_95_log <- predict(model7, interval = "prediction",level = 0.95)
+
+# Wykres
+plot(stezenie58$time, stezenie58$log_concentration, pch = 19, xlab = "czas", ylab = "log(stężenie)",
+  main = "log(stężenie) a czas")
+abline(model7, col = "red", lwd = 2)
+ord <- order(stezenie58$time)
+lines(stezenie58$time[ord], pred_95_log[ord, "lwr"], lty = 2)
+lines(stezenie58$time[ord], pred_95_log[ord, "upr"], lty = 2)
+
+# Wyniki
+s7 <- summary(model7)
+R2 <- s7$r.squared
+F_stat <- s7$fstatistic[1]
+df1 <- s7$fstatistic[2]
+df2 <- s7$fstatistic[3]
+Fcrit <- round(qf(1 - alpha, df1 = df1, df2 = df2), 3)
+p_wartosc <- pf(F_stat, df1, df2, lower.tail = FALSE)
+
+# Korelacja
+y_obs <- stezenie58$log_concentration
+y_hat <- fitted(model7)
+korelacja <- cor(y_obs, y_hat)
+```
+
+Ze zmienionego modelu otrzymujemy współczynnik determinacji:
+\[ R^2 = `r round(R2, 3)`. \]
+
+Ponownie testujemy hipotezę zerową $H_0: \beta_1=0$ (stężenie nie zależy od czasu) oraz alternatywną $H_1: \beta_1 \neq 0$ przy wykorzystaniu statystyki F. Z informacji o nowym modelu otrzymujemy:
+\[ F = `r round(F_stat, 3)` > `r round(Fcrit, 3)` = F_{1 - `r alpha`, `r df1`,`r df2`} . \]
+Dodatkowo otrzymujemy:
+\[ \text{p-wartość} = `r round(p_wartosc, 3)` < `r alpha` = \alpha \]
+Współczynnik korelacji w zmienionym modelu wynosi:
+\[ `r round(korelacja, 3)` , \]
+czyli model bardzo dobrze opisuje zmienność logarytmu stężenia. 
+
+**Wniosek:** Na podstawie obu powyższych wyników testu statystycznego odrzucamy $H_0,$ czyli ponownie wiemy, że stężenie zależy od czasu, a statystyka F jest o wiele większa. 
+
+Wysoka wartość współczynnika determinacji dotyczy zmiennej w skali logarytmicznej i nie jest bezpośrednio porównywalna z wartością $R^2$ uzyskaną dla modelu liniowego w skali oryginalnej. Dodatkowo wartość $R^2$ mówi nam o tym, że ogromna część zmienności w stężeniu może być wytłumaczona przy pomocy nowego modelu.
+
+**c) Na wykresie przedstaw stężenie roztworu względem czasu. Dodaj krzywą regresji i pasmo 95% przedziałów predykcji na podstawie wyników z punktu b). Porównaj z wykresem z zadania 5.**
+
+```{r}
+# Wykres z zadania 5
+par(mfrow = c(1, 2))
+pred_95 <- predict(model5, interval = "prediction", level = 0.95)
+plot(stezenie58$time, stezenie58$concentration, pch = 19, xlab = "czas", ylab = "stężenie",
+  main = "Stężenie a czas – model liniowy")
+abline(model5, col = "red", lwd = 2)
+ord <- order(stezenie58$time)
+lines(stezenie58$time[ord], pred_95[ord, "lwr"], lty = 2)
+lines(stezenie58$time[ord], pred_95[ord, "upr"], lty = 2)
+
+# PP
+time_grid <- seq(min(stezenie58$time), max(stezenie58$time), length.out = 200)
+grid_df <- data.frame(time = time_grid)
+pred_log <- predict(model7, newdata = grid_df, interval = "prediction", level = 0.95)
+
+# Powrót do skali sprzed logarytmu
+fit_exp <- exp(pred_log[, "fit"])
+lwr_exp <- exp(pred_log[, "lwr"])
+upr_exp <- exp(pred_log[, "upr"])
+
+# Wykres nowy
+plot(stezenie58$time, stezenie58$concentration, pch = 19, xlab = "czas", ylab = "stężenie",
+  main = "Stężenie a czas – model logarytmiczny")
+lines(time_grid, fit_exp, lwd = 2)
+lines(time_grid, lwr_exp, lty = 2)
+lines(time_grid, upr_exp, lty = 2)
+par(mfrow = c(1, 1))
+```
+
+**Komentarz:** W porównaniu z wykresem z zadania 5 model logarytmiczny znacznie lepiej oddaje nieliniowy charakter zależności stężenia od czasu, szczególnie w początkowej części, gdzie obserwowany jest szybki spadek stężenia. Krzywa regresji przebiega bliżej punktów empirycznych, a 95% pasma przedziałów predykcyjnych są węższe i bardziej symetryczne względem dopasowania niż w modelu liniowym, co świadczy o lepszym dopasowaniu i bardziej realistycznym opisie zmienności danych. Podsumowując, transformacja logarytmiczna tworzy model lepiej spełniający założenia regresji i tworzący trafniejsze predykcje.
+
+**d) Oblicz współczynnik korelacji między obserwowanym a przewidywanym stężeniem roztworu opartym na modelu z punktu b). Porównaj z odpowiednim wynikiem z zadania 5.**
+
+```{r}
+# Model z zadania 5 (bez transformacji)
+y_obs <- stezenie58$concentration
+y_hat_lin <- fitted(model5)
+cor_5 <- cor(y_obs, y_hat_lin)
+
+# Model z zadania 7b (logarytmiczny)
+y_hat_log <- exp(fitted(model7)) 
+cor_log <- cor(y_obs, y_hat_log)
+```
+
+Współczynniki korelacji wynoszą:
+\[ \text{dla modelu z zadania 5:  } `r round(cor_5, 3)`, \]
+\[ \text{dla modelu z logarytmem: } `r round(cor_log, 3)`. \]
+Oznacza to, że model z logarytmem dużo lepiej opisuje zmienność w stężeniu w zależności od czasu.
+
+## Zadanie 8.
+**Skonstruuj nową zmienną objaśniającą $\tilde t = \text{time}^{-1/2}$. Powtórz zadanie 7, używając modelu regresji ze stężeniem roztworu jako zmienną odpowiedzi i $\tilde t$ jako zmienną objaśniającą ($Y \sim \tilde t$). Podsumuj wyniki. Który model wydaje się najlepszy i dlaczego?**
+
+```{r}
+# Nowa zmienna
+stezenie58$t_tilde <- stezenie58$time^(-1/2)
+
+# Model
+model8 <- lm(concentration ~ t_tilde, data = stezenie58)
+b0 <- coef(model8)[1]
+b1 <- coef(model8)[2]
+```
+Z modelu otrzymujemy równanie regresji:
+\[ \hat Y_i = `r round(b0, 3)` + `r round(b1, 3)` X_i \]
+
+```{r}
+# PP
+t_grid <- seq(min(stezenie58$t_tilde), max(stezenie58$t_tilde), length.out = 200)
+grid_df <- data.frame(t_tilde = t_grid)
+pred_95_t <- predict(model8, newdata = grid_df, interval = "prediction", level = 0.95)
+
+# Wykres
+plot(stezenie58$t_tilde, stezenie58$concentration, pch = 19, xlab = "nowe t", ylab = "stężenie",
+  main = "Regresja stężenie ~ nowe t")
+ord <- order(t_grid)
+lines(t_grid[ord], pred_95_t[ord, "fit"], lwd = 2)
+lines(t_grid[ord], pred_95_t[ord, "lwr"], lty = 2)
+lines(t_grid[ord], pred_95_t[ord, "upr"], lty = 2)
+
+# Wyniki
+s8 <- summary(model8)
+R2_t <- s8$r.squared
+
+F_stat <- s8$fstatistic[1]
+df1 <- s8$fstatistic[2]
+df2 <- s8$fstatistic[3]
+p_wartosc <- pf(F_stat, df1, df2, lower.tail = FALSE)
+Fcrit <- round(qf(1 - alpha, df1 = df1, df2 = df2), 3)
+
+# Korelacja
+y_obs <- stezenie58$concentration
+y_hat_t <- fitted(model8)
+cor_t <- cor(y_obs, y_hat_t)
+```
+**Odpowiedź:** Nasz współczynnik determinacji to:
+\[ R^2 = `r round(R2, 3)`, \]
+co wskazuje na to, że aż 99% zmienności stężenia jest wyjaśnione przez zastosowany model.
+
+Testujemy hipotezę zerową $H_0: \beta_1=0$ (stężenie nie zależy od $\tilde t = \text{time}^{-1/2}$) oraz alternatywną $H_1: \beta_1 \neq 0$ przy wykorzystaniu statystyki F. Po zbadaniu modelu otrzymujemy:
+\[ F = `r round(F_stat, 3)` > `r round(Fcrit, 3)` = F_{1 - `r alpha`, `r df1`,`r df2`} \text{  oraz p-wartość}  = `r round(p_wartosc, 3)` < `r alpha` = \alpha, \]
+co prowadzi do odrzucenia hipotezy zerowej $H_0: \beta_1=0$
+
+Współczynnik korelacji wynosi:
+\[ `r round(korelacja, 3)` , \]
+co oznacza, że model bardzo dobrze opisuje zmienność stężenia roztworu w funkcji zmiennej $\tilde t = \text{time}^{-1/2}$. 
+
+**Wniosek:** Na podstawie powyższych wyników stwierdzamy, że stężenie roztworu istotnie statystycznie zależy od $\tilde t = \text{time}^{-1/2},$ a rozważany model charakteryzuje się bardzo dobrym dopasowaniem do danych. Pomimo to najlepszym z modeli wciąż pozostaje model logarytmiczny z zadania 7, ponieważ osiąga najwyższe dopasowania przy jednoczesnym zachowuje stabilności predykcji.
+
+## Zadania teoretyczne (+1 pkt.)
+### Zadanie 1.
+**a) Za pomocą R oblicz wartość krytyczną dla dwukierunkowego t-testu istotności z $r$ stopniami swobody, $r \in {5, 10, 50}$, przy poziomie istotności $\alpha = 0.05$. Oznacz tę wartość jako $t_c$. **
+
+```{r, echo = TRUE}
+r <- c(5, 10, 50)
+alpha <- 0.05
+t_c <- qt(1 - alpha/2, df = r)
+```
+
+Obliczone wartości to:
+\[ t_c = `r round(t_c, 3)` \]
+
+**b) Za pomocą R oblicz wartość krytyczną dla testu istotności F z jednym stopniem swobody w liczniku i $r$ stopniami swobody w mianowniku, $r \in {5, 10, 50}$, przy poziomie istotności $\alpha = 0.05$. Oznacz tę wartość jako $F_c$.**
+
+```{r, echo = TRUE}
+F_c <- qf(1 - alpha, df1 = 1, df2 = r)
+```
+
+Obliczone wartości to:
+\[ F_c = `r round(F_c, 3)` \]
+
+**c) Sprawdź, czy kwadrat wartości $t_c$ wynosi $F_c$ i wyjaśnij dlaczego.**
+
+```{r, echo = TRUE}
+roznice <- round(F_c - t_c^2, 3)
+```
+
+Różnice między $t_c^2$ i $F_c$ wynoszą:
+\[ różnice: `r roznice` \]
+Jak możemy zauważyć - różnice są (z dokładnością do błędu numerycznego) równe 0, co oznacza, że istotnie $t_c^2=F_c.$ Wynika to z własności rozkładów statystycznych: jeżeli zmienna losowa $T$ ma rozkład Studenta z $r$ stopniami swobody, to jej kwadrat $T^2$ ma rozkład Fishera-Snadecora z jednym i $r$ stopniami swobody, czyli $T^2 \sim F_{1,r}.$
+
+### Zadanie 2.
+**a) Ile obserwacji znajduje się w pliku?**
+
+**Odpowiedź:** 22, bo $\text{dfE} = n - 2 = 20$ w regresji z jedną zmienną.
+
+**b) Oblicz estymator $\sigma$.**
+
+Estymator wariancji to $s^2$, bo $E(MSE)=E(s^2)=\sigma^2$ i obliczamy go ze wzoru
+$s^2 = \frac{SSE}{dfE} = \frac{400}{20} = 20.$ 
+
+W takim przypadku estymator $\sigma$ to $s = \sqrt{20} \approx 4.47.$
+
+**c) Sprawdź, czy współczynnik nachylenia (slope) jest równy zero (podaj statystykę testową z liczbą stopni swobody i wniosek).**
+
+Sprawdzamy hipotezy $H_0: \beta_1 = 0 \text{vs} H_1: \beta_1 \neq 0$ na poziomie ufności 95%, czyli z $\alpha = 0.05.$
+
+Jeśli zachodzi $H_0$ to **statystyka testowa** $F = \frac{MSM}{MSE} = \frac{SSM/dfM}{SSE/dfE} = \frac{100}{20} = 5$ pochodzi z rozkładu Fishera-Snedecora z $dfM = 1$ i $dfE = 20$ stopniami swobody, czyli $F < F_{0.95, 1, 20}.$
+
+```{r}
+Fcrit <- round(qf(1 - 0.05, df1 = 1, df2 = 20), 3) # 4.351
+```
+
+Po skorzystaniu z funkcji w R możemy porównać:
+\[ 5 > `r Fcrit` = F_{0.95, 1, 20} . \]
+Ponieważ $F > F_{0.95, 1, 20},$ odrzucamy $H_0,$ czyli współczynnik nachylenia nie jest równy 0.
+
+**d) Jaką część zmienności zmiennej odpowiedzi wyjaśnia model?**
+
+Żeby odpowiedzieć na to pytanie musimy obliczyć współczynnik determinacji $R^2=\frac{SSM}{SST}=\frac{SSM}{SSM+SSE}=\frac{100}{100+400}=0.2.$ Jego wartość mówi nam o tym, że model wyjaśnia tylko 20% zmienności zmiennej
+
+**e) Jaki jest próbkowy współczynnik korelacji między zmienną odpowiedzi a zmienną objaśniającą?**
+Obliczamy korelacje na podstawie wzoru dla regresji liniowej prostej z wykładu, to znaczy $r^2_{XY}=R^2,$ czyli próbkowy współczynnik korelacj $r_{XY} = \text{sign}(\hat \beta_1) \times \sqrt{R^2}=\text{sign}(\hat \beta_1) \times \sqrt{0.2} \approx \text{sign}(\hat \beta_1) \times 0.447.$
+
+Potrzebujemy znać znak $\hat\beta_1,$ żeby określić znak korelacji (czy jest dodatnie/ujemna), ponieważ wzór na $\beta_1$ to:
+$$\hat\beta_1=\frac{\sum_{i=1}^{n}(X_i-\bar X)(Y_i-\bar Y)}{\sum_{i=1}^{n}(X_i-\bar X)^2},$$
+a pełen wzór na korelacje to:
+$$r_{XY}=\frac{\sum_{i=1}^{n}(X_i-\bar X)(Y_i-\bar Y)}{\sqrt{\sum_{i=1}^{n}(X_i-\bar X)^2\sum_{i=1}^{n}(Y_i-\bar Y)^2}}.$$

@@ -1,0 +1,763 @@
+---
+title: "Modele liniowe — Raport z listy 5"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+documentclass: article
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+header-includes:
+  - \renewcommand{\tablename}{Tabela}
+  - \usepackage{graphicx}
+  - \usepackage{caption}
+  - \usepackage{dsfont}
+  - \captionsetup{labelfont=bf, font=small}
+toc-title: "Spis Treści"
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+\clearpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "cairo_pdf",
+  fig.crop = FALSE,
+  message = FALSE,
+  fig.width = 5.6, 
+  fig.height = 2.8,
+  fig.align = "center",
+  warning = FALSE)
+
+library(car)
+library(ggplot2)
+library(kableExtra)
+library(knitr)
+library(patchwork)
+
+# Globalne ustawienia dla siatki na wykresie
+theme_set(theme_bw() + theme(panel.grid.major = element_line(color = "grey80"), panel.grid.minor = element_line(color = "grey90"), plot.title = element_text(hjust = 0.5, face = "bold")))
+```
+
+# **Teoria**
+## **Model regresji liniowej**
+Rozważamy klasyczny model regresji liniowej zapisany w postaci macierzowej:
+$$Y=\mathbb{X}\beta+\varepsilon,$$
+gdzie:
+
+- $Y = (Y_1, \ldots, Y_n)'$ jest wektorem zmiennej objaśnianej,
+- $\beta = (\beta_0, \ldots, \beta_{p-1})'$ jest wektorem nieznanych parametrów,
+- $\varepsilon=(\varepsilon_1, \ldots, \varepsilon_n)$ jest wektorem składników losowych, 
+- $\mathbb{X} \in \mathbb{R}^{n \times p}$ to macierz postaci:
+$$\mathbb{X} = \left(\begin{array}{cccc}
+   1  & X_{1,1} &...& X_{1,p-1}\\
+    1 & X_{2,1} &...& X_{2,p-1}\\
+    ... & ...&...&...\\
+    1 & X_{n,1} & ... & X_{n,p-1}
+\end{array}\right)$$
+
+Model zakłada liniową zależność wartości oczekiwanej zmiennej $Y$ od zmiennych objaśniających.
+
+## **Estymacja parametrów**
+Estymator najmniejszych kwadratów (MNK minimalizuje sumę kwadratów reszt i ma postać:
+$$\hat \beta =(\mathbb{X}'\mathbb{X})^{-1}\mathbb{X}'Y.$$
+
+Wektor **wartości dopasowanych wynosi** 
+$$\hat Y = \mathbb{X} \hat \beta$$
+
+## **Sumy kwadratów i współczynnik determinacji:**
+
+Definiujemy:
+$$\text{SST} = \sum_{i=1}^n (Y_i-\bar Y)^2, \ \text{SSE} = \sum_{i=1}^n (Y_i-\hat Y_i)^2, \ \text{SSM} = \sum_{i=1}^n (\hat Y_i-\bar Y)^2,$$
+przy czym $SST = SSM + SSE.$ 
+
+Współczynnik determinacji:
+$$R^2 = \frac{SSM}{SST}=\frac{\sum_{i=1}^n(\hat Y_i - \bar Y)^2}{\sum_{i=1}^n(Y_i - \bar Y)^2}$$
+określa część zmienności $Y$, która jest wyjaśniona przez model regresji.
+
+## **Stopnie swobody i średni kwadrat reszt**
+Liczba stopni swobody:
+
+- całkowite: $df_T=n-1$
+- reszt: $df_E=n-p$
+- modelu: $df_M=p-1.$
+
+Średni kwadrat reszt: $\text{MSE}=\frac{\text{SSE}}{df_E}=\frac{\text{SSE}}{n-p}$
+
+## **Statystyka Fishera-Snadecora (porównanie modeli)**
+Do porównania modeli pełnego (F) i zredukowanego (R) stosujemy statystykę testową:
+$$F = \frac{\frac{SSE_R - SSE_F}{dfE_R-dfE_F}}{MSE_F},$$
+która przy prawdziwości hipotezy zerowej ma rozkład $F \sim F(dfE_R-dfE_F, dfE_F).$ Natomiast p-wartość wyznaczamy ze wzoru $p=\mathbb{P}(F \geq F_{obs}).$ Przyjmujemy poziom istotności $\alpha = 0.05$
+
+## **Test dla jednego parametru**
+Dla hipotez $H_0:\beta_j=0$ vs $H_1:\beta_j\neq 0$ stosujemy statystykę:
+$$t = \frac{\hat\beta_j}{se(\hat\beta_j)},$$
+gdzie 
+$$se(\hat \beta_j)= \sqrt{s^2 [(\mathbb{X}'\mathbb{X})^{-1}]_{j+1,j+1}}=\sqrt{MSE \cdot [(\mathbb{X}'\mathbb{X})^{-1}]_{j+1,+1j}}.$$
+Statystyka ma rozkład t-Studenta z $n-p$ stopniami swobody.
+
+## **Przedziały ufności**
+Przedział ufności poziomu $1-\alpha$ dla parametru $\beta_j$:
+$$\hat\beta_j \pm t_{1-\alpha/2,\ df_E} \cdot se(\hat\beta_j).$$
+
+
+\clearpage
+# **Zadania**
+## **Zadanie 1**
+Dane z pliku CH06PR15.txt dotyczą poziomu satysfakcji pacjentów. Zmienne:
+
+- $X_1$ – wiek,
+- $X_2$ – ciężkość choroby,
+- $X_3$ – poziom niepokoju,
+- $Y$ – poziom satysfakcji.
+
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+pacjenci <- read.table("data/CH06PR15.txt", header = FALSE)
+colnames(pacjenci) <- c("wiek", "choroba", "niepokoj", "satysfakcja")
+alpha <- 0.05
+```
+
+**1.1. Użyj modelu regresji, aby opisać zależność poziomu satysfakcji pacjentów od wieku, ciężkości choroby i poziomu niepokoju. Podaj dopasowane równanie regresji i współczynnik $R^2$. Oblicz współczynniki regresji oraz $R^2$ za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R.**
+
+Rozważamy model $Y=\beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_3 +\varepsilon.$
+```{r}
+# Model regresji liniowej
+model <- lm(satysfakcja ~ wiek + choroba + niepokoj, data = pacjenci)
+Y <- pacjenci$satysfakcja
+X <- cbind(1, pacjenci$wiek, pacjenci$choroba, pacjenci$niepokoj)
+
+# Współczynniki regresji i R^2 z R
+summ <- summary(model)
+b_hat_r <- round(coef(model))
+R2_r <- round(summ$r.squared, 4)
+
+# Współczynniki regresji i R^2 z teorii
+b_hat <- solve(t(X) %*% X) %*% t(X) %*% Y
+b_hatr <- round(b_hat, 4)
+Y_hat <- X %*% b_hat
+SST <- sum((Y - mean(Y))^2)
+SSE <- sum((Y - Y_hat)^2)
+R2 <- 1 - SSE / SST
+R2r <- round(R2, 4)
+df2 <- c(b_hat, R2)
+
+tab <- data.frame(
+  b0 = c(b_hatr[1] , b_hat_r[1]),
+  b1 = c(b_hatr[2] , b_hat_r[2]),
+  b2 = c(b_hatr[3] , b_hat_r[3]),
+  b3 = c(b_hatr[4] , b_hat_r[4]),
+  R2 = c(R2r, R2_r)
+)
+rownames(tab) <- c("Wartości teoretyczne", "Wartości z R")
+kable(tab, caption = "Porównanie wartości współczynników i $R^2$")
+b_hat <- round(b_hat, 4)
+R2 <- round(R2, 4)
+```
+
+Otrzymaliśmy $Y=$ `r b_hatr[1]` + `r b_hatr[2]` $X_1$ + `r b_hatr[3]` $X_2$ + `r b_hatr[4]` $X_3$ oraz $R^2=$ `r R2`
+
+Oszacowania parametrów uzyskane metodą teoretyczną i przy użyciu funkcji lm() są identyczne, co potwierdza poprawność implementacji MNK. Wartość $R^2$ wskazuje,
+że zmienne takie jak wiek, ciężkość choroby i poziom niepokoju opisują ok. 0.54 zmienności w poziomie satysfakcji u pacjentów. Widzimy, że model liniowy jest mniej więcej dobrym przybliżeniem zależności między zmiennymi.
+
+
+**1.2. Przetestuj hipotezę, że poziom satysfakcji pacjentów nie zależy od trzech zmiennych objaśniających. Podaj testowana hipotezę, statystykę testową z liczbą stopni swobody, p-wartość oraz własne wnioski. Oblicz statystykę testową oraz p-wartość za pomocą wzoru teoretycznego oraz poleceń wbudowanych w R.**
+
+```{r}
+n <- nrow(X)
+p <- length(b_hat)
+k <- 3 # ile parametrów badamy
+
+# statystyka F i p-wartość z R
+F_stat_R <- summ$fstatistic[1]
+df1 <- summ$fstatistic[2]
+df2 <- summ$fstatistic[3]
+p_value_R <- pf(F_stat_R, df1, df2, lower.tail = FALSE)
+F_crit <- qf(1 - alpha, df1, df2)
+
+# statystyka F i p-wartość z teorii
+dfE <- n - p
+dfER <- n - (p - k)
+MSE <- SSE / dfE
+F_stat <- ((SST-SSE) / (dfER - dfE)) / MSE
+p_value <- 1 - pf(F_stat, dfER - dfE, dfE)
+
+#F_stat_R - F_stat   # = -1.065814e-14 
+#p_value_R - p_value # = -7.44489e-19
+```
+
+Testujemy hipotezę:
+$$H_0: \beta_1=\beta_2=\beta_3=0 \quad \text{vs} \quad H_1: (\exists i) \ \beta_i \neq 0 \text{ dla } i \in \{1,2,3\}$$ 
+korzystając ze statystyki F.
+
+Ponieważ model zredukowany ma postać $Y=\beta_0+\varepsilon,$ to $SSE_R=SST-SSM_R = SST-0=SST.$
+
+Po obliczeniu statystyka F wynosi `r round(F_stat, 4)`, a p-wartość `r round(p_value, 4)`. Przy założeniu prawdziwości $H_0$, statystyka F ma rozkład Fishera-Snadecora z `r df1` i `r df2` stopniami swobody. Ponieważ $F=$ `r round(F_stat, 4)` > `r round(F_crit, 4)` $F_{0.95}(3, 42),$ odrzucamy $H_0.$ Przy obliczeniu parametrów zarówno przy skorzystaniu z R, jak i teoretycznych wzorów dostajemy niemal identyczne wyniki.
+
+
+**1.3. Przetestuj hipotezy, że poziom satysfakcji pacjentów nie zależy od każdej z trzech zmiennych objaśniających osobno. Podaj testowane hipotezy, statystyki testowe z liczbą stopni swobody, p-wartości oraz własne wnioski. Oblicz statystyki testowe oraz p-wartości za pomocą wzorów teoretycznych oraz poleceń wbudowanych w R.**
+
+```{r}
+# Obliczenia R
+betaj_hat <- summ$coefficients[-1, 1]
+se_betaj <- summ$coefficients[-1, 2]
+t_R <- summ$coefficients[-1, 3]
+p_R <- summ$coefficients[-1, 4]
+
+# Obliczenia teoretyczne
+b <- b_hat[2:4]
+se_bj <- sqrt(MSE * diag( solve(t(X) %*% X) )[2:4])
+t_t <- b / se_bj
+p_t <- 2 * (1 - pt(abs(t_t), dfE))
+
+# Tabela
+tab <- data.frame(
+  b1 = round(c(t_R[1], t_t[1], p_R[1], p_t[1]), 4),
+  b2 = round(c(t_R[2], t_t[2], p_R[2], p_t[2]), 4),
+  b3 = round(c(t_R[3], t_t[3], p_R[3], p_t[3]), 4)
+)
+rownames(tab) <- c("t (R)", "t (teoria)", "p (R)", "p (teoria)")
+kable(t(tab), caption = "Porównanie wartości teoretycznych i z R dla t i p")
+t_crit <- qt(1 - alpha/2, dfE)
+```
+
+Dla każdego parametru regresji $\beta_j,$ gdzie $j \in \{1,2,3\},$ testujemy hipotezy
+$$H_0: \beta_j=0 \quad \text{vs} \quad H_1: \beta_j \neq 0$$
+stosując statystykę t-Studenta z $df = n - p = 46 - 4=42$ stopniami swobody.
+
+Wyniki testów t obliczone teoretycznie i z wykorzystaniem funkcji lm() są zgodne. Dla zmiennych X1 (wiek) i X2 (ciężkość choroby) p-wartość jest większa od 0.05, co oznacza brak podstaw do odrzucenia hipotezy zerowej. Natomiast zmienna X3 (poziom niepokoju) ma istotny statystycznie wpływ na poziom satysfakcji pacjentów. W konsekwencji model może zostać zredukowany poprzez usunięcie zmiennych X1 i X2 bez istotnej utraty informacji.
+
+
+**1.4. Podaj osobne 95% przedziały ufności dla współczynników regresji przy wieku, ciężkości choroby i poziomu niepokoju. Jaki jest związek między tymi wynikami a wynikami testów z punktu c)?**
+
+```{r}
+# PU
+PU <- cbind(b - t_crit * se_bj, b + t_crit * se_bj)
+PUr <- round(PU, 4)
+```
+
+Dla współczynników regresji otrzymujemy 95% przedziały ufności postaci:
+
+- dla $\beta_1:$ [`r PUr[1,1]`, `r PUr[1,2]`]
+- dla $\beta_2:$ [`r PUr[2,1]`, `r PUr[2,2]`]
+- dla $\beta_3:$ [`r PUr[3,1]`, `r PUr[3,2]`]
+
+Przedziały ufności dla $\beta_1$ (wiek) oraz $\beta_2$ (ciężkość choroby)
+zawierają 0, co jest zgodne z wynikami testów t z punktu 1.3 i potwierdza
+brak ich istotności statystycznej. Przedział ufności dla $\beta_3$ (poziom
+niepokoju) nie zawiera 0, co potwierdza istotny statystycznie wpływ tej
+zmiennej na poziom satysfakcji pacjentów.
+
+## **Zadanie 2**
+**Przedstaw na wykresach residua w zależności od przewidywanej satysfakcji i każdej ze zmiennych objaśniających. Czy występują jakieś nietypowe wzory lub wartości odstające?**
+
+```{r}
+# Dane z modelu
+df_plot <- data.frame(
+  res = residuals(model),
+  y_hat = fitted(model),
+  X1 = pacjenci$wiek,
+  X2 = pacjenci$choroba,
+  X3 = pacjenci$niepokoj
+)
+
+# Rysujemy wykresy na tych samych zasadach, wiec:
+zad2 <- function(x, xlab, title){
+  ggplot(df_plot, aes(x = .data[[x]], y = res)) +
+    geom_point(size = 1.5) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    labs(x = xlab, y = "Residua", title = title) +
+    theme(aspect.ratio = 1)
+}
+p1 <- zad2("X1", "Wiek", "Reszty a X1")
+p2 <- zad2("X2", "Ciężkość choroby", "Reszty a X2")
+p3 <- zad2("X3", "Poziom niepokoju", "Reszty a X3")
+
+p1 | p2 | p3
+```
+
+Nie widzimy żadnych wyraźnych trendów czy wzorów, co sugeruje, że poprawnie zakładamy liniowość modelu. Rozrzut reszt wokół zera jest w przybliżeniu symetryczny i nie wykazuje systematycznego zwiększania się lub zmniejszania wraz ze wzrostem wartości zmiennych objaśniających. Nie są również widoczne pojedyncze obserwacje o skrajnie dużych wartościach reszt, które mogłyby zostać uznane za wyraźne outliery. Analiza wykresów diagnostycznych nie wskazuje na istotne naruszenia założeń klasycznego modelu regresji liniowej.
+
+## **Zadanie 3**
+**Czy rozkład residuów jest w przybliżeniu normalny? Aby potwierdzić swoja odpowiedź, użyj testu Shapiro-Wilka i wykresu qqplot.**
+
+```{r}
+# Test Shapiro–Wilka
+res <- residuals(model)
+shapiro <- shapiro.test(res)
+# wykres QQ
+par(pty = "s")
+qqnorm(res, main = "QQ-plot reszt", xlab = "Kwantyle teoretyczne", ylab = "K. empiryczne")
+qqline(res, col = "red", lwd = 2)
+par(pty = "m")
+```
+Dla testu Shapiro-Wilka otrzymujemy p-wartość = `r round(shapiro$p.value, 4)`. Ponieważ jest ona większa niż poziom istotności $0.05,$ nie mamy podstaw do odrzucenia założenia o normalności danych. Podsumowując, na podstawie zarówno testu Shapiro–Wilka, jak i wykresu QQ można stwierdzić, że rozkład reszt jest w przybliżeniu normalny.
+
+## **Zadanie 4**
+
+**Drugi zbiór danych zawiera informacje o studentach informatyki. Zmienne:**
+
+- $id$ – identyfikator studenta,
+- $HSM, \ HSS, \ HSE$ – średnie oceny ze szkoły średniej z matematyki, przedmiotów ścisłych i języka angielskiego,
+- $SATM, \ SATV$ – wyniki testu SAT z matematyki i części werbalnej,
+- $SEX$ – płeć ($1$ – mężczyzna, $2$ – kobieta),
+- $GPA$ – średnia ocen po trzech semestrach.
+
+```{r}
+studenci <- read.table("data/csdata.txt", header = FALSE)
+colnames(studenci) <- c("id","GPA","HSM","HSS","HSE","SATM","SATV","SEX")
+```
+
+**4.1. Przeprowadź następujące dwie regresje:**
+
+(i) przewiduj $GPA$ za pomocą $HSM$, $HSS$ i $HSE$;
+(ii) przewiduj $GPA$ za pomocą $SATM$, $SATV$, $HSM$, $HSS$ i $HSE$.
+
+**Wyznacz różnicę między statystykami $SSE$ dla dwóch modeli i skonstruuj statystykę $F$ do testowania hipotezy zerowej, że współczynniki przy dwóch zmiennych $SAT$ są równe zero (w modelu z pięcioma predyktorami).**
+
+```{r}
+# Modele R = full bez SATM i SATV
+model_R <- lm(GPA ~ HSM + HSS + HSE, data = studenci)
+model_F <- lm(GPA ~ SATM + SATV + HSM + HSS + HSE, data = studenci)
+
+# SSE
+SSE_R  <- sum(residuals(model_R)^2)
+SSE_F <- sum(residuals(model_F)^2)
+SSE_diff <- SSE_R - SSE_F
+
+# Liczba parametrów
+n <- nrow(studenci)
+p_R <- length(coef(model_R))
+p_F <- length(coef(model_F))
+df1 <- p_F - p_R
+df2 <- n - p_F
+
+# Statystyka F
+F_stat <- (SSE_diff / df1) / (SSE_F / df2)
+p_value <- pf(F_stat, df1 = df1, df2 = df2)
+```
+
+Przyjmujemy, że $Y = GPA, \ X_1 = SATM, \ X_2 = SATV, \ X_3 = HSM, \ X_4 = HSS, \ X_5 = HSE.$
+
+Badamy dwa modele:
+
+(i) pełny: $Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_3 + \beta_4 X_4 + \beta_5 X_5 + \varepsilon,$
+(ii) zredukowany: $Y = \beta_0 + \beta_3 X_3 + \beta_4 X_4 + \beta_5 X_5 + \varepsilon,$
+
+dla których których różnica wynosi $SSE_R - SSE_F=$ `r round(SSE_diff, 4)`. Sugeruje nam to już na początku, że zmienne $SATM$ i $SATV$ wnoszą niewiele do wyjaśnienia zmienności w $GPA.$
+
+Testować będziemy $H_0:\ \beta_4 = \beta_5 = 0 \quad \text{vs} \quad H_1:\ (\beta_4,\beta_5) \neq (0,0),$ przy czym hipoteza zerowa oznacza, że zmienne $SATM$ i $SATV$ nie wnoszą istotnej
+informacji do modelu po uwzględnieniu ocen ze szkoły średniej.
+
+Po wykonaniu obliczeń otrzymujemy p-wartość równą `r round(p_value, 4)` oraz statystykę F = `r round(F_stat, 4)`, która przy prawdziwości $H_0$ ma rozkład $F \sim F(2, 218).$  Ponieważ widzimy, że $F < F(0.95,2,218) =$ `r round(qf(0.95, df1 = 2, df2 = 218), 4)`, nie mamy podstaw do odrzucenia $H_0.$
+
+**4.2. Użyj funkcji anova do obliczenia tej samej statystyki testowej. Podaj statystykę testową, liczbę stopni swobody, p-wartość oraz wnioski.**
+
+Badamy ponownie hipotezy: $H_0:\ \beta_4 = \beta_5 = 0 \quad \text{vs} \quad H_1:\ (\beta_4,\beta_5) \neq (0,0),$  ale tym razem z wykorzystaniem funkcji anova.
+
+```{r}
+# Funkcja ANOVA
+anova_summ <- anova(model_R, model_F)
+F_stat2 <- anova_summ$F[2]
+df12 <- anova_summ$Df[2]
+df22 <- anova_summ$Res.Df[2]
+p_value2 <- anova_summ$`Pr(>F)`[2]
+tab4 <- data.frame(
+  Statystyka = c(F_stat, F_stat2),
+  df1 = c(df1, df12),
+  df2 = c(df2, df22),
+  p_wartość = c(p_value, p_value2)
+)
+rownames(tab4) <- c("Teoria", "Anova")
+kable(tab4, caption = "Funkcja anova a obliczenia")
+```
+
+Widzimy, że wszystkie wielkości są identyczne poza p-wartością, przy czym dwie uzyskane wartości sumują się do 1. Wynika to z faktu, że jedna z nich odpowiada prawemu, a druga lewemu ogonowi rozkładu Fishera–Snadecora. Ponieważ test Fishera–Snadecora jest testem prawostronnym, p-wartość wyznacza się jako $\mathbb{P}(F \geq F_{obs}),$ co w tym przypadku daje 0.61179.
+
+## **Zadanie 5**
+**Użyj regresji, aby przewidywać $GPA$ przy pomocy zmiennych $SATM$, $SATV$, $HSM$, $HSE$ i $HSS$. Umieść zmienne w modelu w kolejności podanej powyżej. Oblicz sumy kwadratów typu I oraz typu II.**
+
+Przyjmujemy, że $Y = GPA, \ X_1 = SATM, \ X_2 = SATV, \ X_3 = HSM, \ X_4 = HSS, \ X_5 = HSE.$
+
+Rozważamy model regresji liniowej: $Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \beta_3 X_3 + \beta_4 X_4 + \beta_5 X_5 + \varepsilon.$
+
+**Sumy kwadratów typu I** mierzą przyrost wyjaśnionej zmienności przy dodawaniu kolejnych zmiennych do modelu **w ustalonej kolejności**. Formalnie $$SS_k^{(I)}=SSE_{k-1}-SSE_k.$$
+
+**Sumy kwadratów typu II** mierzą wpływ danej zmiennej po uwzględnieniu wszystkich pozostałych zmiennych za wyjątkiem interakcji. Nie zależą od kolejności wprowadzania zmiennych.
+
+```{r}
+# Model
+model5 <- lm(GPA ~ SATM + SATV + HSM + HSE + HSS, data = studenci)
+
+# Sumy kwadratów
+typ_I <- anova(model5)
+typ_II <- Anova(model5, type = 2)
+
+# Tabelka
+typy <- data.frame(
+  "Typ I" = typ_I$`Sum Sq`,
+  "Typ II" = typ_II$`Sum Sq`,
+  check.names = FALSE
+)
+rownames(typy) <- rownames(typ_I)
+kable(round(typy, 4))
+```
+
+**5.1. Co można wywnioskować o tym modelu na podstawie wyników sum kwadratów typu I i typu II?**
+
+Sumy kwadratów typu I pokazują silną zależność wyników od kolejności wprowadzania zmiennych, ponieważ zmienne SAT przejmują dużą część wariancji tylko wtedy, gdy pojawiają się na początku modelu. Sumy kwadratów typu II wskazują na rzeczywisty, częściowy wpływ predyktorów i sugerują, że zmienne opisujące wyniki ze szkoły średniej mają większe znaczenie dla wyjaśniania $GPA$ niż wyniki SAT. Różnice między typami I i II potwierdzają współzależność regresorów i wskazują, że do wnioskowania o istotności zmiennych należy preferować sumy kwadratów typu II.
+
+**5.2. Sprawdź (uruchamiając dodatkowe regresje), że suma kwadratów typu I dla zmiennej $HSM$ jest różnicą statystyk $SSM$ dla dwóch modeli:**
+
+(i) $GPA$ vs. $SATM$, $SATV$ i $HSM$;
+(ii) $GPA$ vs. $SATM$ i $SATV$.
+
+```{r}
+# Modele
+model_i <- lm(GPA ~ SATM + SATV + HSM, data = studenci)
+model_ii <- lm(GPA ~ SATM + SATV, data = studenci)
+
+# Zmienna objaśniana
+Y <- studenci$GPA
+SST <- sum((Y - mean(Y))^2)
+
+# SSE
+SSE_ii <- sum(residuals(model_ii)^2)
+SSE_i <- sum(residuals(model_i)^2)
+
+# SSM
+SSM_ii <- SST - SSE_ii
+SSM_i <- SST - SSE_i
+
+# Różnica SSM
+diff_SSM <- SSM_i - SSM_ii
+
+# Suma kwadratów typu I dla HSM 
+SS_I_HSM <- typ_I$`Sum Sq`[3]
+```
+
+Różnica statystyk $SSM$ pomiędzy modelami z i bez zmiennej $HSM$ jest równa `r round(diff_SSM, 4)`, a suma kwadratów typu I dla zmiennej $HSM$ to `r round(SS_I_HSM, 4)`. Jak widzimy - obie liczby są równe. Potwierdza to, że suma kwadratów typu I mierzy przyrost wyjaśnionej zmienności wynikający z dodania zmiennej do modelu przy ustalonej kolejności regresorów. Obliczenia empiryczne są zgodne z definicją teoretyczną sum kwadratów typu I.
+
+**5.3. Czy istnieją predyktory, dla których sumy kwadratów typu I i typu II są takie same? Wyjaśnij dlaczego.**
+
+Tak - istnieje dokładnie jeden taki predyktor i jest to zawsze ostatni predyktor z modelu, czyli w tym zadaniu zmienna $X_2 = HSS.$ Wynika to z faktu, że suma kwadratów typu I zmiennej, która została wprowadzona jako ostatnia w modelu, mierzy przyrost dopasowania po uwzględnieniu wszystkich pozostałych predyktorów.
+
+## **Zadanie 6**
+
+**Utwórz nową zmienną (nazwij ją $SAT$), która będzie sumą dwóch testów $SAT$. Użyj regresji, aby przewidywać $GPA$ przy pomocy trzech zmiennych: $SATM$, $SATV$ i $SAT$. Opisz uzyskane wyniki i wyjaśnij je.**
+
+```{r}
+studenci$SAT <- studenci$SATM + studenci$SATV
+model6 <- lm(GPA ~ SATM + SATV + SAT, data = studenci)
+summary(model6)
+```
+
+W modelu regresji  $GPA = \beta_0 + \beta_1 SATM + \beta_2 SATV + \beta_3 SAT + \varepsilon,$ 
+gdzie $SAT = SATM + SATV,$ zmienna $SAT$ jest kombinacją liniową pozostałych regresorów. Wskazuje to na współliniowość pomiędzy regresorami, która zbadana została z wykorzystaniem funkcji summary i lm. Z podsumowania wynika, że model jest słabo określany i możemy zauważyć, że dla zmiennej $SAT$ pojawiają się wartość NA. Oznacza to, że do modelu regresji nie powinniśmy wprowadzać zmiennych, które są liniową kombinacją regresorów, ponieważ wtedy kolumny macierz $\mathbb{X}$ są liniowo zależne, a więc macierz $\mathbb{X}'\mathbb{X}$ nie jest odwracalna, co z kolei powoduje, że estymator $\hat \beta$ przestaje istnieć.
+
+## **Zadanie 7**
+
+**Użyj regresji $GPA$ na zmiennych objaśniających $HSM$, $HSS$, $HSE$, $SATM$, $SATV$ i $SEX$. Dla tego modelu:**
+
+**7.1. Przeanalizuj wykresy partial regression plots. Podaj krótkie wyjaśnienie, czym one są i jakiego rodzaju informacje zawierają. Czy są jakieś nietypowe wzory lub obserwacje?**
+
+**Wykresy partial regression plots** (wykresy zmiennej dodanej) przedstawiają zależność pomiędzy resztami zmiennej objaśnianej $GPA$ po usunięciu wpływu pozostałych regresorów a resztami danej zmiennej objaśniającej po usunięciu wpływu tych samych zmiennych. Nachylenie prostej jest równe estymatorowi parametru regresji przy danej zmiennej w modelu pełnym. Pozwalają nam one ocenić liniowość częściowej zależności oraz zidentyfikować obserwacje o dużym wpływie na estymację współczynnika.
+
+```{r, fig.width=7, fig.height=5}
+model7 <- lm(GPA ~ HSM + HSS + HSE + SATM + SATV + SEX, data = studenci)
+zmienne <- c("HSM", "HSS", "HSE", "SATM", "SATV", "SEX")
+par(mfrow=c(2,3))
+for (zm in zmienne){avPlot(model7, zm)}
+```
+
+Dla zmiennej $HSM$ widoczna jest dodatnia, wyraźna zależność liniowa, co wskazuje na istotny dodatni wpływ tej zmiennej na $GPA$ po uwzględnieniu pozostałych regresorów. W przypadku $HSS$, $HSE$, $SATM$, $SATV$ oraz $SEX$ nachylenie prostej jest bliskie zeru, co sugeruje słaby lub nieistotny wpływ tych zmiennych. Na wykresach widoczne są też pojedyncze obserwacje odstające (oznaczone numerami), jednak nie tworzą one wyraźnych struktur ani wzorców nieliniowych.
+
+**7.2. Przeanalizuj reszty studentyzowane wewnętrznie (studentized residuals) i zewnętrznie (studentized deleted residuals). Podaj krótkie wyjaśnienie, czym one są, jaka jest różnica między nimi i jakiego rodzaju informacje zawierają. Czy występują jakieś wartości odstające?**
+
+```{r}
+n <- length(residuals(model7))
+p <- length(coef(model7))
+```
+
+**Reszty studentyzowane wewnętrznie** są standaryzowanymi resztami, w których wariancja
+składnika losowego estymowana jest na podstawie całej próby, co pozwala nam na porównywanie obserwacji na wspólnej skali. **Reszty studentyzowane zewnętrznie**
+różnią się tym, że wariancja estymowana jest po usunięciu danej obserwacji, dzięki
+czemu są bardziej czułe na obserwacje odstające. Przy spełnieniu założeń modelu reszty zewnętrzne mają rozkład t-Studenta z $n-p=$ `r n-p` stopniami swobody, a dla dużych prób dążą do rozkładu $N(0,1).$ Reszty wewnętrzne mają natomiast rozkład w przybliżeniu normalny. Jako próg identyfikacji obserwacji nietypowych (outlierów) stosujemy wartość krytyczną $t_{0.975, 217}=$ `r round(qt(0.975, df = 217), 4)`, czyli w przybliżeniu 2.
+
+```{r}
+# Reszty i outliery
+wewn <- rstandard(model7) # Reszty studentyzowane wewnętrznie
+zewn <- rstudent(model7)  # Reszty studentyzowane zewnętrznie
+out_wewn <- which(abs(wewn) > 2) # próg |r| > 2
+out_zewn <- which(abs(zewn) > 2)
+
+df <- data.frame(
+  id = rep(1:length(wewn), 2),
+  wartosc = c(wewn, zewn),
+  typ_reszt = rep(c("Reszty studentyzowane wewnętrznie",
+                    "Reszty studentyzowane zewnętrznie"),
+                  each = length(wewn))
+)
+
+ggplot(df, aes(x = id, y = wartosc)) +
+  geom_point(color = "navy") +
+  geom_hline(yintercept = c(-2, 2), linetype = "dashed", color = "red") +
+  geom_hline(yintercept = c(-3, 3), linetype = "dotted", color = "grey40") +
+  facet_wrap(~typ_reszt, nrow = 1) +
+  labs(x = "Numer obserwacji", y = "Wartość reszty")
+```
+
+Wykresy zdają się wyglądać identycznie natomiast po bliskim porównaniu obu wykresów zauważamy, że punkty z dolnych ich część minimalnie się od siebie różnią. Mamy odpowiednio dla:
+
+- reszt studentyzowanych wewnętrznie `r length(out_wewn)` wartości odstających,
+- reszt studentyzowanych zewnętrznie `r length(out_zewn)` wartości odstających.
+
+**7.3. Przeanalizuj miarę $DFFITS$ dla wszystkich obserwacji. Podaj krótkie wyjaśnienie, czym ona jest i jakiego rodzaju informacje zawiera. Co można wywnioskować o tym modelu na podstawie analizy tej statystyki?**
+
+**Statystyka $DFFITS_i$** mierzy wpływ i-tej obserwacji na jej własną wartość predykcji $\hat Y$ i jest zdefiniowana jako 
+$$DFFITS_i = \frac{\hat Y_i - \hat Y_{(i)i}}{\sqrt{s^2_{(i)}H_{ii}}},$$ 
+gdzie $\hat Y_{(i)i}$ oznacza wartość predykcji po usunięciu i-tej obserwacji, więc oczekujemy, że $\hat Y_{(i)i}$ oraz $\hat Y_i$ będą przyjmowały podobne wartości.
+$H_{ii}$ jest i-tym elementem diagonalnym macierzy $\mathbb{X}(\mathbb{X}'\mathbb{X})^{-1}\mathbb{X}'$, a $s_{(i)}$ estymatorem odchylenia standardowego. Miara ta identyfikuje punkty, które istotnie wpływają na dopasowanie modelu. Za obserwacje potencjalnie wpływowe uznaje się te, dla których $|DFFITS_i| > 2\sqrt{\frac{p}{n}},$ gdzie $p$ jest liczbą parametrów modelu, a $n$ liczbą obserwacji.
+
+```{r}
+# DFFITS
+dff <- dffits(model7)
+
+# Próg
+n <- nobs(model7)
+p <- length(coef(model7))
+prog <- 2 * sqrt(p/n)
+
+idx_dff <- which(abs(dff) > prog)
+```
+
+Analiza **DFFITS** wskazuje na występowanie `r length(idx_dff)` obserwacji potencjalnie wpływowych: 
+`r paste(idx_dff, collapse = ", ")`.
+
+Oznacza to, że usunięcie tych obserwacji może prowadzić do zauważalnych zmian wartości predykcji $\hat Y_i$ dla danych punktów. Jednocześnie sama ich obecność nie przesądza o konieczności usunięcia i wymaga dalszej diagnostyki z użyciem innych miar.
+
+**7.4. Przeanalizuj odległość Cooka (Cook's distance) dla wszystkich obserwacji. Podaj krótkie wyjaśnienie, czym ona jest i jakiego rodzaju informacje zawiera. Co można wywnioskować o tym modelu na podstawie analizy tej statystyki?**
+
+**Odległość Cooka** $D_i$ mierzy łączny wpływ i-tej obserwacji na wszystkie wartości predykcji oraz estymatory parametrów modelu i oreśla jak bardzo zmieniłby się model regresji po usunięciu danego punktu. Jako regułę diagnostyczną przyjmujemy standardowy próg $|D_i| > 1.$ Wzór na odległość Cook’a dla i–tej obserwacji to:
+
+$$D_i = \sum_{j=1}^n \frac{(\hat Y_j - \hat Y_{(i)j})^2)}{s^2p}$$
+
+```{r}
+# Odległość Cooka
+cook <- cooks.distance(model7)
+
+# obserwacje potencjalnie wpływowe
+nr <- as.integer(which(abs(cook) > 1)) #
+```
+
+Dla progu $|D_i| > 1$ nie wykrywamy żadnych obserwacji wpływowych, co oznacza że żadna pojedyncza obserwacja nie dominuje estymacji modelu.
+
+**7.5. Przeanalizuj miarę $DFBETA$ dla wszystkich obserwacji. Podaj krótkie wyjaśnienie, czym ona jest i jakiego rodzaju informacje zawiera. Co można wywnioskować o tym modelu na podstawie analizy tej statystyki?**
+
+Miara $DFBETA_{ik}$ określa, jak bardzo zmienia się estymator parametru $\hat\beta_k$ po usunięciu i-tej obserwacji. Jest to statystyka znormalizowana, dzięki czemu pozwala porównywać wpływ obserwacji na różne parametry regresji. Duże wartości bezwzględne $DFBETA_{k}$ wskazują, że dana obserwacja ma istotny wpływ na estymację konkretnego współczynnika, nawet jeśli nie wpływa znacznie na cały model. Miarę obliczamy z
+$$DFBETA_{ik}=\frac{\hat \beta_k - \hat \beta_{(i)k}}{s_{(i)}(\hat\beta_{(i)k})}$$
+
+Jako regułę diagnostyczną często stosuje się próg: $|DFBETA_{ik}| > \frac{2}{\sqrt{n}},$
+gdzie $n$ jest liczbą obserwacji.
+
+```{r}
+# DFBETA
+dfb <- dfbetas(model7)
+
+# próg krytyczny
+n <- nobs(model7)
+prog <- 2 / sqrt(n)
+
+# obserwacje wpływowe
+obdfb <- which(abs(dfb) > prog, arr.ind = TRUE)
+```
+
+Analiza miary $DFBETA$ wskazuje na to, że `r length(unique(obdfb[, 1]))` obserwacji może istotnie wpływać na estymację pojedynczych współczynników regresji, nawet jeśli nie są znacząco wpływowe dla dopasowanio modelu.
+
+**7.6. Przeanalizuj miarę tolerancji (Tolerance). Podaj krótkie wyjaśnienie, czym ona jest i jakiego rodzaju informacje zawiera. Co można wywnioskować o tym modelu na podstawie analizy tej statystyki? Jaka wartość tej statystyki jest dla modelu z zadania 6?**
+
+Miara **tolerancji** dla zmiennej $X_k$ jest zdefiniowana jako $\text{Tol}_k = 1 - R_k^2,$ gdzie $R_k^2$ oznacza współczynnik determinacji dla modelu objaśnianego przez pozostałe zmienna objaśniające z wyłączeniem k-tej zmiennej objaśniającej $X_k.$ Małe wartości tej miary będą sugerować problem z multikolinearnością (gdy macierz $\mathbb{X}'\mathbb{X}$ jest bliska macierzy osobliwej) w modelu.
+
+```{r}
+# VIF
+vif_vals <- vif(model7)
+
+# Tolerance
+tolerance_vals <- 1 / vif_vals
+kable(t(tolerance_vals))
+```
+Wszystkie wartości tolerancji są znacznie większe od 0.1, co oznacza brak istotnych problemów z wielokolinearnością w modelu. Żaden z regresorów nie jest w wysokim stopniu wyjaśniany przez pozostałe zmienne, a macierz $\mathbb{X}'\mathbb{X}$ nie jest bliska osobliwej. W konsekwencji estymatory parametrów regresji są stabilne i możliwa jest poprawna interpretacja współczynników.
+
+**7.7. Czym są kryteria wyboru modeli $AIC$, $BIC$, $C_p$ Mallows'a? Wybierz najlepszy model regresji przy użyciu $BIC$, kryterium $C_p$ Mallows'a, modyfikowanego współczynnika determinacji.**
+
+**Kryteria wyboru:**
+
+- **AIC (Akaike Information Criterion):** $AIC = n \log(\frac{SSE}{n}) + 2p$ mierzy kompromis między dopasowaniem a złożonością modelu; preferuje modele lepiej dopasowane, ale słabiej karze za liczbę parametrów niż BIC. Wybieramy modele z najmniejszymi wartościami.
+- **BIC (Bayesian Information Criterion):** $BIC = n \log(\frac{SSE}{n}) + \log(n)p$ silniej ocenia złożoność modelu niż AIC, dlatego poprawniej pozwala wybierać modele prostsze; jest spójny (przy (n\to\infty) wybiera model prawdziwy, jeśli należy do zbioru).
+- **$C_p$ Mallowsa:** $C_p = \frac{SSE}{MSE_F} - n + 2p$ porównuje model zredukowany z pełnym; dobre modele mają $C_p \approx p,$
+- **Skorygowany współczynnik determinacji:** $\tilde{R}^2 = 1 - \frac{MSE}{MST}$ mierzy dopasowanie modelu i pozwala porównywać modele o różnych ilościach zmiennych, ale nie jest kryterium informacyjnym i nie gwarantuje wyboru modelu optymalnego. Wybieramy model o największym współczynniku.
+
+```{r}
+n <- nrow(studenci)
+
+# modele (nie chcemy tego pisac recznie)
+vars <- c("HSM", "HSS", "HSE", "SATM", "SATV", "SEX")
+subsets <- unlist(
+  lapply(1:length(vars), function(k) combn(vars, k, simplify = FALSE)),
+  recursive = FALSE
+)
+
+modele <- lapply(subsets, function(v) lm(as.formula(paste("GPA ~", paste(v, collapse = " + "))), data = studenci))
+names(modele) <- sapply(subsets, paste, collapse = " + ")
+
+# model pełny
+model_full <- lm(GPA ~ HSM + HSS + HSE + SATM + SATV + SEX, data = studenci)
+MSE_f <- summary(model_full)$sigma^2
+
+# Kryteria
+AIC_vals <- sapply(modele, AIC)
+BIC_vals <- sapply(modele, BIC)
+adjR2_vals <- sapply(modele, function(i) summary(i)$adj.r.squared)
+
+# C_p
+Cp_vals <- sapply(modele, function(i) {
+  SSE <- sum(resid(i)^2)
+  p <- length(coef(i))
+  SSE / MSE_f - n + 2 * p
+})
+
+# czy uwzględniamy zmienną?
+X_ind <- sapply(vars, function(v) sapply(modele, function(m) as.integer(v %in% names(coef(m)))))
+
+# Podsumowanie (można wyświetlić, nie załączam w raporcie, bo jest na 2,5 strony)
+podsumowanie <- data.frame(
+  AIC = round(AIC_vals, 3),
+  BIC = round(BIC_vals, 3),
+  adj_R2 = round(adjR2_vals, 3),
+  Cp = round(Cp_vals, 3),
+  p = sapply(modele, function(i) length(coef(i))),
+  X_ind
+)
+rownames(podsumowanie) <- NULL
+
+# kable(podsumowanie, caption = "Porównanie modeli, gdzie Y = GPA")
+
+# zestawienie najlepszych
+pcp <- subset(podsumowanie, Cp == p)
+paic <- podsumowanie[order(podsumowanie$AIC), ][1:3, ]
+pbic <- podsumowanie[order(podsumowanie$BIC), ][1:3, ]
+pr2 <- podsumowanie[order(-podsumowanie$adj_R2), ][1:3, ]
+
+best <- rbind(
+  cbind(pcp, kryterium = "Cp == p"),
+  cbind(paic, kryterium = "Top 3 AIC"),
+  cbind(pbic, kryterium = "Top 3 BIC"),
+  cbind(pr2, kryterium = "Top 3 adj_R2")
+)
+kable(best, caption = "Porównanie najbliższych wyborowi modeli, gdzie Y = GPA")
+```
+
+Nie załączam pełnego podsumowania, ale wartości dla wszystkich możliwych modeli można sprawdzić kodzie za pomocą zmiennej *podsumowanie.*
+
+Na podstawie kryteriów wybierzemy modele:
+
+- dla AIC: $GPA \sim HSM	+ HSE$
+- dla BIC: $GPA \sim HSM$
+- dla $C_p:$ $GPA \sim HSM	+ HSS	+ HSE	+ SATM + SATV + SEX$ model pełny
+- dla adj. $R^2:$ $GPA \sim HSM + HSE	+ SATM$
+
+Podsumowując, poszczególne kryteria prowadzą do wyboru różnych modeli, natomiast widzimy, że każdy z nich zawiera zmieną $HSM.$ Korzystając z wiedzy z wykładu i poprzednich list, wiemy że zbyt duża ilość zmiennych wpływa różnież na nadmiar informacji i może powodować wzrost tzw. fałszywych odkryć, dlatego też za najlepszy przyjmiemy model $GPA \sim HSM,$ ale rozważyć możemy również wykorzystanie modelu $GPA \sim HSM	+ HSE.$ 
+
+# **Zadania teoretyczne**
+## **Zadanie 1**
+**Na podstawie danych estymowane są parametry modelu $Y=\beta_0+\beta_1 X_1+\beta_2 X_2+\varepsilon$. Estymatory są następujące: $b_0=1$, $b_1=4$, $b_2=3$, $s=3$.**
+
+**1.1. Przewiduj wartość Y dla $X_1=2$ i $X_2=6$.**
+
+Podstawiamy wartości do wzoru: $\hat Y=b_0 + b_1 X_1 + b_2 X_2=1 + 4*2 + 3*6=27$
+
+**1.2 Estymowane odchylenie standardowe estymatora wartości oczekiwanej Y dla $X_1=2$ i $X_2=6$ wynosi 2. Estymuj wariancję błędu predykcji $\sigma^2(\mathrm{pred})$.**
+
+Podstawiamy do wzoru: $s^2(pred)=s^2+s^2(conf)=3^2+2^2=13$
+
+**1.3. Powyższy model został dopasowany przy użyciu 20 obserwacji, a estymowane odchylenie standardowe $b_1$, $s(b_1)$, jest równe 1. Skonstruuj 95% przedział ufności dla $\beta_1$.**
+
+Mamy dane $b_1 = 4, \ s(b_1) = 1, \ \alpha = 0.05, \ n = 20,$ liczbę parametrów $p = 3$ i wartość krytyczną $t^*=t_{1-\alpha/2,n-p}=t_{0.975, 17}=$ `r qt(1 - 0.05/2, 20-3)`.
+
+Podstawiamy do wzoru na 95% przedział ufności:
+$b_1 \pm t^* \cdot s(b_1)=4 \pm$ `r qt(1 - 0.05/2, 20-3)`
+
+## **Zadanie 2**
+**Dokonujemy analizy danych przy użyciu następującego modelu regresji wielorakiej: $Y=\beta_0+\beta_1 X_1+\beta_2 X_2+\beta_3 X_3+\varepsilon$. Poniżej znajduje się tabela z sumami kwadratów typu I i II:**
+
+```{r}
+dfz2teor <- data.frame(
+  "X_i" = c("X_1", "X_2", "X_3"),
+  "Type I" = c("300", "40", "20"),
+  "Type II" = c("30", "25", "?"),
+  check.names = FALSE
+)
+kable(dfz2teor)
+```
+
+**Statystyka $SST$ wynosi $760$, a $n=24$.**
+
+Korzystając z tego, że sumy kwadratów typu I sumują się do SSM: $SSM = 360.$ Dodatkowo $dfE_F=n-p=24-4=20,SSE=400$ i zakładamy $\alpha=0.05.$
+
+**2.1. Ile wynosi suma kwadratów typu II dla $X_3$?**
+
+Tyle samo co suma kwadratów typu I dla $X_3,$ tzn. 20.
+
+**2.2. Przetestuj hipotezę, że $\beta_1=0$ (w pełnym modelu).**
+
+Testujemy $H_0: \ \beta_1=0$ vs. $H_1: \ \beta_0 \neq 0.$
+
+Obliczamy ze wzorów teoretycznych:
+
+- $SSE_R-SSE_F = SSE_F + SSE(X_1|X_2, X_3)-SSE_F = 30$
+- $dfE_R-dfE_F = 24-3 - 20 = 1$
+- $MSE = SSE / dfE= 400/20=20$
+
+$$F=\frac{30}{20}=1.5$$
+Jeżeli $H_0$ jest prawdziwa to $F \sim F(dfE_R-dfE_F, dfE_F)=F(1,20).$ Wartość krytyczna to $F^*=F(0.95,1,20)=$ `r qf(1 - 0.05, 1, 20)` i ponieważ $F>F^*,$ odrzucamy $H_0.$
+
+**2.3. Przetestuj hipotezę, że $\beta_2=\beta_3=0$.**
+
+**Odpowiedź:** Dla $i=2,3$ testujemy $H_0: \ \beta_2=\beta_3=0$ kontra $H1: (\exists i) \beta_i \neq 0.$ Znamy już $MSE=20$ i $dfE_F=20.$ Obliczamy ponownie:
+
+- $SSE_R-SSE_F = SSM(X_2,X_3|X_1)=SSM(X_1,X_2,X_3)-SSM(X_1)=SSM-SS_{I}(X_1)=360-300=60$
+- $dfE_R-dfE_F = 24-2 - 20 = 22 - 20 = 2$
+
+$$F=\frac{60/2}{20}=1.5$$
+Wartość krytyczna to $F^*=F(0.95,2,20)=$ `r qf(1 - 0.05, 2, 20)` i ponieważ $F>F^*,$ odrzucamy $H_0.$
+
+**2.4 Przetestuj hipotezę, że $\beta_1=\beta_2=\beta_3=0$.**
+
+Dla $i=1,2,3$ testujemy $H_0: \ \beta_2=\beta_3=0$ kontra $H1: (\exists i) \beta_i \neq 0.$ Znamy $SSE_F=400,\ MSE=20$ i $dfE_F=20.$ Korzystamy z tego, że model zredukowany składa się tylko z intercepta:
+$$SSE_R=SST-SSM_R=SST-0=760.$$
+Obliczamy:
+
+- $SSE_R-SSE_F = 760-400=360$
+- $dfE_R-dfE_F = 24-1 - 20 = 23 - 20 = 3$
+
+$$F=\frac{360/3}{20}=6$$
+Wartość krytyczna to $F^*=F(0.95,3,20)=$ `r qf(1 - 0.05, 3, 20)` i ponieważ $F>F^*,$ odrzucamy $H_0.$
+
+**2.5. Z modelu zostały usunięte wartości $X_2$ i $X_3$. Przetestuj hipotezę, że $\beta_1=0$ w modelu regresji liniowej prostej $Y=\beta_0+\beta_1 X_1+\varepsilon$ (uwaga: $SSE$ i $df_E$ są inne niż dla modelu z trzema zmiennymi).**
+
+**Obecny model:** $Y=\beta_0+\beta_1 X_1+\varepsilon,$ wiemy, że SST jest takie samo i wynosi 760 oraz w przypadku, gdy model zależy tylko od $X_1$ możemy obliczyć $SSM=SSM(X_1)=300.$ Analogicznie obliczamy, że $SSE=SST-SSM=760-300=460.$ Wtedy statystyka testowa przyjmuje postać:
+
+$$F=\frac{(SST-(SST-SSM))/(24-1-(24-2))}{SSE/(24-2)}=\frac{SSM}{460/22}=\frac{22 \cdot 300}{460}\approx 14.35$$
+Wartość krytyczna to $F^*=F(0.95,1,22)=$ `r qf(1 - 0.05, 1, 22)` i ponieważ $F>F^*,$ odrzucamy $H_0.$
+
+**2.6. Oblicz próbkowy współczynnik korelacji między $Y$ i $X_1$.**
+
+$R=\sqrt{R^2}=\sqrt{\frac{SSM}{SST}}=\sqrt{\frac{300}{760}}\approx 0.6283$

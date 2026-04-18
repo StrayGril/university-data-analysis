@@ -1,0 +1,541 @@
+---
+title: "Zaawansowane modele liniowe — Raport z listy 2"
+author: "Oliwia Turek"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    highlight: tango
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_caption: true
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{booktabs}
+  - \usepackage{caption}
+  - \usepackage{float}
+  - \usepackage{graphicx}
+  - \usepackage{needspace}
+  - \usepackage{polski}
+  - \captionsetup{labelfont=bf, font=small}
+  - \captionsetup[table]{labelfont=bf}
+  - \floatplacement{figure}{htbp}
+  - \raggedbottom
+  - \renewcommand{\contentsname}{Spis Treści}
+  - \renewcommand{\tablename}{Tabela}
+fontsize: 11pt
+geometry: margin=2cm
+mainfont: "Times New Roman"
+sansfont: "Arial"
+linestretch: 1.25
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  eval = TRUE,
+  dev = "pdf",
+  message = FALSE,
+  fig.align = "center",
+  warning = FALSE)
+```
+
+```{r biblioteki}
+library(car)
+library(ggplot2)
+library(pROC)
+library(knitr)
+library(MASS)
+library(patchwork)
+```
+
+\clearpage
+
+# Podstawy teoretyczne
+
+## Regresja Poissona
+
+Niech $Y_1,\dots,Y_n$ będą niezależnymi zmiennymi losowymi takimi, że $Y_i \sim \mathrm{Poisson}(\mu_i)$ dla $i=1, \ldots,n.$
+Wtedy model przyjmuje postać:
+$$\log(\mu_i)=x_i^T\beta \quad \Longleftrightarrow \quad \mu_i=\exp(x_i^T\beta),$$
+
+a predyktor liniowy:
+$$\eta_i=x_i^T\beta=\beta_0+\beta_1x_{i1}+\dots+\beta_{p-1}x_{i,p-1}.$$
+
+## Wiarygodność
+Dla badanej próby funkcja wiarygodności ma postać
+$$L(\beta)=\prod_{i=1}^n \frac{\mu_i^{y_i}e^{-\mu_i}}{y_i!},$$
+a jej logarytm wynosi
+$$\ell(\beta)=\sum_{i=1}^n \left(y_i\log \mu_i-\mu_i-\log(y_i!)\right).$$
+Wartość estymatora największej wiarygodności parametru $\beta$ możemy wyznaczyć jako maksimum funkcji log-wiarygodności
+$$\hat\beta=\arg\max_{\beta}\ell(\beta),$$
+które w praktyce znajduje się numerycznie, ponieważ nie istnieje jego jawna postać analityczna.
+
+## Interakcje
+
+Jeżeli w modelu uwzględniamy interakcje, to do predyktora liniowego wchodzą również iloczyny odpowiednich zmiennych objaśniających. Przykładowo dla dwóch zmiennych zapis ogólny ma postać
+$$\eta_i=\beta_0+\beta_1 x_{i1}+\beta_2 x_{i2}+\beta_3 x_{i1}x_{i2}.$$
+
+## Test ilorazu wiarygodności
+
+Niech $M_0$ oraz $M_1$ będą modelami zagnieżdżonymi, przy czym $M_0 \subset M_1$. Test ilorazu wiarygodności opiera się na statystyce *Deviance*
+$$D(M)=2\bigl(\ell(\hat\beta_{1})-\ell(\hat\beta_{0})\bigr),$$
+gdzie $\ell(\hat\beta_{1})$ jest wartością log-wiarygodności modelu saturowanego, a $\ell(\hat\beta_{0})$ wartością log-wiarygodności modelu zredukowanego.
+
+Przy prawdziwości hipotezy zerowej
+$$H_0: M_0 \text{ jest modelem wystarczającym}$$
+statystyka $D$ ma asymptotycznie rozkład
+$$D \sim \chi^2_r,$$
+gdzie $r$ jest różnicą liczby parametrów w obu modelach.
+
+## Test Walda
+Do testowania hipotezy 
+$$H_0:C\beta=d$$ 
+używamy statystyki 
+$$W=(C\hat\beta-d)^T(C\widehat{\mathrm{Var}}(\hat\beta)C^T)^{-1}(C\hat\beta-d),$$ 
+przy czym, gdy $H_0$ jest prawdziwa zachodzi
+$$ W\sim\chi^2_q, \qquad q=\operatorname{rank}(C).$$
+
+\clearpage
+
+# Zadania
+
+## Zadanie 1 - Opis danych.
+
+Zbiór danych *sklep* zawiera cztery kolumny:
+
+* *no_clients* – liczba klientów obsłużonych w danej godzinie (wartości: $0,1,2,\ldots$),
+* *day* – dzień tygodnia (wartości: poniedziałek, wtorek, $\ldots$, niedziela),
+* *hour* – godzina (wartości: $8,9,\ldots,23$),
+* *events* – informacja o tym, czy w danym dniu miało miejsce wydarzenie sportowe (*event*, wartości: 0 – nie, 1 – tak).
+
+Dane przeanalizujemy za pomocą regresji Poissona, traktując liczbę obsłużonych klientów jako zmienną objaśnianą $y$, a pozostałe zmienne jako potencjalne predyktory.
+
+```{r wczytywanie}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+sklep <- read.csv("data/sklep.csv")
+sklep$day <- factor(sklep$day,
+                    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
+                    labels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+names(sklep)[names(sklep) == "no.klients"] <- "no_clients"
+```
+
+## Zadanie 2 - Analiza wykresów.
+
+Dokonaj wstępnej analizy danych: sporządź boxploty zmiennej *y* względem predyktorów oraz wykresy zależności liczby klientów od godziny z uwzględnieniem dnia i wydarzeń sportowych. Opisz wpływ zmiennych, oceń znaczenie *events* oraz rozważ możliwość agregacji dni i godzin.
+
+
+**Analiza wykresów zależności liczby klientów y w zależności od każdego predyktora osobno**
+
+```{r}
+par(mfrow = c(1, 3))
+boxplot(no_clients ~ as.factor(hour), data = sklep, 
+        main = "Liczba klientów \na godzina",
+        xlab = "Godzina",
+        ylab = "Liczba klientów")
+boxplot(no_clients ~ as.factor(day), data = sklep, 
+        main = "Liczba klientów \na dzień tygodnia",
+        xlab = "Dzień tygodnia",
+        ylab = "Liczba klientów")
+boxplot(no_clients ~ events, data = sklep, 
+        main = "Liczba klientów \na event",
+        xlab = "Wydarzenie sportowe",
+        ylab = "Liczba klientów")
+par(mfrow = c(1, 1))
+```
+
+**Komentarz:** Z wykresów boxplot wyraźnie można zauważyć różnice w rozkładzie liczby klientów w zależności od analizowanych predyktorów.
+
+Najsilniejszą zależność obserwujemy względem zmiennej *hour*. Liczba klientów rośnie wraz z godziną dnia, osiągając maksimum w godzinach popołudniowych i wieczornych (około 16–20). W tych godzinach widoczne jest również większe zróżnicowanie wartości, co sugeruje większą zmienność natężenia ruchu.
+
+W przypadku zmiennej *day* widoczny jest podział na dni robocze oraz weekend. W dni robocze liczba klientów jest wyższa i bardziej zróżnicowana, natomiast w weekend obserwujemy niższe i bardziej stabilne wartości. Sugeruje to możliwość pogrupowania dni na dwie kategorie: dni robocze oraz weekend.
+
+Dla zmiennej *events* różnice są znacznie mniej wyraźne. Rozkłady liczby klientów dla dni z wydarzeniem i bez wydarzenia są podobne, choć można zauważyć niewielkie przesunięcie w kierunku większych wartości dla dni z wydarzeniem. Wpływ tej zmiennej wydaje się jednak słabszy niż w przypadku *hour* i *day*.
+
+Na wszystkich wykresach widoczne są obserwacje odstające, co wskazuje na sporadyczne występowanie nietypowo dużego ruchu klientów. Dodatkowo wariancja liczby klientów wydaje się rosnąć wraz ze średnią, co jest zgodne z założeniami modelu Poissona.
+
+**Analiza wykresów zależności liczby klientów od godziny z uwzględnieniem dnia i wydarzeń**
+
+```{r, out.width='70%'}
+# Z raportu
+# qplot(hour, no_clients, shape = as.factor(events), col = day, data = sklep)
+ggplot(sklep, aes(x = hour, y = no_clients,
+                  color = day,
+                  shape = factor(events))) +
+  geom_point(alpha = 0.6, size = 1.1) +
+  labs(
+    title = "Liczba klientów w zależności od godziny \n z uwzględnieniem dnia i wydarzenia",
+    x = "Godzina",
+    y = "Liczba klientów",
+    color = "Dzień tygodnia",
+    shape = "Wydarzenie"
+  ) +
+  scale_x_continuous(breaks = c(8, 12, 16, 20)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.title = element_text(size = 12),
+    legend.position = "right"
+  )
+```
+
+**Komentarz:** Wykres pokazuje zależność liczby klientów od godziny z jednoczesnym uwzględnieniem dnia tygodnia oraz występowania wydarzenia sportowego. Łatwo zauważyć, że największe różnice dotyczą przede wszystkim dni tygodnia i pory dnia, natomiast wpływ wydarzeń sportowych nie wydaje się znaczny.
+
+```{r, out.width='70%'}
+# Z raportu
+# qplot(hour, no_clients, facets = events ~ day, data = sklep)
+
+# Bardziej wyglądający
+ggplot(sklep, aes(x = hour, y = no_clients)) +
+  geom_point(alpha = 0.6, size = 1.1, color = "blue") +
+  facet_grid(events ~ day) +
+  labs(
+    title = "Liczba klientów w zależności od godziny \n z uwzględnieniem dnia i wydarzenia",
+    x = "Godzina",
+    y = "Liczba klientów"
+  ) +
+  scale_x_continuous(breaks = c(8, 12, 16, 20)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.title = element_text(size = 12),
+    strip.text = element_text(size = 10),
+    panel.grid.minor = element_line(linewidth = 0.2),
+    panel.grid.major = element_line(linewidth = 0.4)
+  )
+```
+
+**Komentarz:** Możemy zauważyć, że zmienna *events* nie zmienia istotnie kształtu zależności między liczbą klientów a godziną. Profile dla dni z wydarzeniami i bez nich są bardzo podobne, co sugeruje brak istotnych interakcji z pozostałymi zmiennymi.
+
+```{r, out.width='70%'}
+# Z raportu, ale nie dodaję, bo poza rozróżnieniem daje nam podobne informacje jak przedostatni
+# qplot(hour, no_clients, color = day, data = sklep) # zbedny?
+
+# Z raportu
+# qplot(hour, no_clients, facets = ~ day, data = sklep)
+# Bardziej wyglądający
+ggplot(sklep, aes(x = hour, y = no_clients)) +
+  geom_point(alpha = 0.6, size = 1, color = "blue") +
+  facet_wrap(~ day) +
+  labs(
+    title = "Liczba klientów w zależności od godziny \n z uwzględnieniem dnia tygodnia",
+    x = "Godzina",
+    y = "Liczba klientów"
+  ) +
+  scale_x_continuous(breaks = c(8, 12, 16, 20)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.title = element_text(size = 12),
+    strip.text = element_text(size = 10),
+    panel.grid.minor = element_line(linewidth = 0.2),
+    panel.grid.major = element_line(linewidth = 0.4)
+  )
+```
+
+Wykres z podziałem na dni tygodnia potwierdza, że liczba klientów zmienia się przede wszystkim w zależności od godziny oraz rodzaju dnia. Dla dni roboczych widoczny jest wyraźny wzrost liczby klientów w godzinach popołudniowych, natomiast w weekend liczba klientów jest niższa i bardziej równomiernie rozłożona w ciągu dnia. Wzorce te są spójne w obrębie poszczególnych dni.
+
+
+Analiza powyższych wykresów uwzględniających jednocześnie godzinę, dzień tygodnia oraz wydarzenia sportowe wskazuje, że główną rolę odgrywają zmienne *hour* oraz *day*. Dodatkowo wykresy z podziałem na dni tygodnia potwierdzają możliwość redukcji liczby kategorii poprzez:
+
+* agregację dni do dwóch grup: dni robocze i weekend,
+* agregację godzin do przedziałów ok. czterogodzinnych o podobnym poziomie natężenia ruchu.
+
+## Zadanie 3 – Pełny model Poissona z interakcjami.
+
+Skonstruuj model Poissona z pełną interakcją między regresorami (jako faktorami).
+Podaj liczbę parametrów oraz liczbę parametrów związanych ze zmienną *events*.
+Zbadaj istotność zmiennej *events* oraz interakcji.
+
+```{r}
+alpha <- 0.05
+
+# =========================
+# Model pełny (wszystkie interakcje)
+# =========================
+model_full <- glm(
+  no_clients ~ day * factor(hour) * factor(events), 
+  family = poisson, 
+  data = sklep
+)
+
+# macierz projektu
+X_full <- model.matrix(model_full)
+
+# liczba parametrów bez wyrazu wolnego
+num_parametry <- ncol(X_full) - 1
+
+# liczba parametrów zależnych od zmiennej events
+num_events_params <- sum(grepl("events", colnames(X_full)))
+
+# =========================
+# Test istotności zmiennej events
+# =========================
+# porównanie:
+# model bez events vs pełny
+model_no_events <- glm(
+  no_clients ~ day * factor(hour), 
+  family = poisson, 
+  data = sklep
+)
+
+anova_events <- anova(model_no_events, model_full, test = "Chisq")
+pwartosc_events <- anova_events$`Pr(>Chi)`[2]
+
+decyzja <- ifelse(
+  pwartosc_events < alpha, 
+  "zmienna events jest istotna",
+  "zmienna events niekoniecznie jest istotna"
+)
+
+# =========================
+# Test istotności interakcji (day × hour)
+# =========================
+# model z interakcją
+model_z_interakcja <- glm(
+  no_clients ~ day * factor(hour), 
+  family = poisson, 
+  data = sklep
+)
+
+# model bez interakcji
+model_bez_interakcji <- glm(
+  no_clients ~ day + factor(hour), 
+  family = poisson, 
+  data = sklep
+)
+
+anova_interakcje <- anova(model_bez_interakcji, model_z_interakcja, test = "Chisq")
+p_wartosc_interakcje <- anova_interakcje$`Pr(>Chi)`[2]
+```
+
+**Komentarz:** Przyjmujemy poziom istotności $\alpha = 0.05.$
+
+Model Poissona z interakcją pomiędzy wszystkimi regresorami, przy traktowaniu każdej zmiennej jako faktora, zawiera `r num_parametry` parametry poza wyrazem wolnym. Parametry związane ze zmienną *events* stanowią `r num_events_params` elementów macierzy planu. Obejmują one zarówno efekt główny tej zmiennej, jak i wszystkie interakcje, w których ona występuje.
+
+Istotność zmiennej *events* badamy poprzez porównanie modelu bez tej zmiennej z modelem pełnym za pomocą testu anova. Otrzymana wartość *p* wynosi `r round(pwartosc_events, 4)` w związku z czym nie mamy podstaw do odrzucenia hipotezy zerowej o braku istotności zmiennej. Oznacza to, że możemy założyć iż zmienna *events* nie jest istotna statystycznie.
+
+Ponieważ zmienna *events* okazała się nieistotna, dalszą analizę interakcji ograniczamy do zmiennych *day* i *hour*. W szczególności badamy istotność interakcji między tymi zmiennymi poprzez porównanie modelu z interakcją *day × hour* z modelem addytywnym (bez interakcji). Otrzymana *p*-wartość wynosi $\approx$ `r round(p_wartosc_interakcje, )`, co oznacza, że interakcja *day* $\times$ *hour* jest istotna statystycznie.
+
+## Zadanie 4 - Uproszczenie modelu poprzez agregację zmiennych.
+
+Utwórz zmienne agregujące dzień (roboczy/weekend) i godzinę (przedziały 4-godzinne), a następnie skonstruuj model Poissona z interakcją między nimi. Określ liczbę parametrów i sprawdź, czy model różni się istotnie od modelu pełnego.
+
+```{r}
+alpha <- 0.05
+
+# =========================
+# Agregacja zmiennych
+# =========================
+# agregacja dni: dni robocze vs weekend
+sklep$dzien_typ <- factor(
+  ifelse(sklep$day %in% c("Saturday", "Sunday"), "weekend", "roboczy"),
+  levels = c("roboczy", "weekend")
+)
+
+# agregacja godzin do przedziałów
+sklep$godzina_przedzial <- factor(
+  cut(sklep$hour, 
+      breaks = c(7, 11, 15, 19, 23), 
+      labels = c("8-12", "12-16", "16-20", "20-24")),
+  levels = c("8-12", "12-16", "16-20", "20-24")
+)
+
+# =========================
+# Model z agregowanymi zmiennymi
+# =========================
+model_agregowany <- glm(
+  no_clients ~ dzien_typ * godzina_przedzial, 
+  family = poisson, 
+  data = sklep
+)
+
+# liczba parametrów (bez wyrazu wolnego)
+liczba_parametrow_agregowany <- ncol(model.matrix(model_agregowany)) - 1
+
+# =========================
+# Porównanie z modelem pełnym
+# =========================
+test_porownanie <- anova(model_agregowany, model_full, test = "Chisq")
+p_wartosc_porownanie <- test_porownanie[2, "Pr(>Chi)"]
+
+decyzja_porownanie <- ifelse(
+  p_wartosc_porownanie < alpha, 
+  "modele różnią się statystycznie",
+  "brak podstaw do stwierdzenia różnic statystycznych"
+)
+```
+
+**Komentarz:** Redukujemy liczbę parametrów poprzez agregację zmiennych:
+
+* zmienna *day* została sprowadzona do dwóch kategorii: dni roboczych (poniedziałek-piątek) oraz weekendu (sobota-niedziela),
+* zmienna *hour* została podzielona na cztery przedziały czterogodzinne, przy czym np. przedział 8–12 oznacza godziny od 8:00 do 11:59.
+
+Taki sposób agregacji jest uzasadniony wynikami wcześniejszej analizy wykresów..
+
+Na podstawie nowych zmiennych konstruujemy model Poissona z interakcją, który zawiera `r liczba_parametrow_agregowany` parametrów poza wyrazem wolnym. W porównaniu z modelem pełnym, zawierającym `r num_parametry` parametry, oznacza to redukcję liczby parametrów około `r round(num_parametry /liczba_parametrow_agregowany)`-krotnie.
+
+Aby sprawdzić, czy model uproszczony nie traci istotnie na jakości dopasowania względem modelu pełnego z Zadania 3, porównujemy oba modele za pomocą testu ilorazu wiarygodności, wykonanego funkcją *anova(..., test = "Chisq")*. Testowane hipotezy mają postać:
+$$H_0: \text{brak istotnych różnic między modelami} \quad \text{vs} \quad H_1: \text{model pełny opisuje dane istotnie lepiej.}$$
+
+Otrzymana wartość *p* wynosi `r round(p_wartosc_porownanie, 4)`, co oznacza brak podstaw do odrzucenia hipotezy zerowej. Możemy zatem uznać, że uproszczony model opisuje dane równie dobrze jak model pełny, przy znacznie mniejszej liczbie parametrów.
+
+## Zadanie 5 - Wyznaczenie wartości predyktora liniowego dla podgrup.
+
+Stwórz tabelę dla modelu z zadania 4, zawierającą podgrupy wyznaczone przez typ dnia i przedział godzinowy, odpowiadające im średnie liczby klientów oraz postać i wartość predyktora liniowego dla każdej podgrupy.
+
+```{r}
+# =========================
+# Przygotowanie podgrup (kombinacje kategorii)
+# =========================
+podgrupy_modelu <- expand.grid(
+  dzien_typ = levels(sklep$dzien_typ),
+  godzina_przedzial = levels(sklep$godzina_przedzial)
+)
+
+opis_podgrup <- paste(podgrupy_modelu$dzien_typ, podgrupy_modelu$godzina_przedzial)
+
+# =========================
+# Macierz dla podgrup
+# =========================
+X_podgrupy <- model.matrix(
+  ~ dzien_typ * godzina_przedzial, 
+  data = podgrupy_modelu
+)
+
+# =========================
+# Obliczenia modelowe
+# =========================
+# estymatory parametrów modelu
+beta_hat <- coef(model_agregowany)
+
+# wartości predyktora liniowego
+eta_hat <- as.vector(X_podgrupy %*% beta_hat)
+
+# wartości oczekiwane (średnia liczba klientów)
+mu_hat <- exp(eta_hat)
+
+# =========================
+# Postać analityczna predyktora
+# =========================y
+nazwy_beta <- paste0("β", 0:(length(beta_hat)-1))
+eta_postac <- character(nrow(X_podgrupy))
+
+for (i in 1:nrow(X_podgrupy)) {
+  aktywne <- which(X_podgrupy[i, ] == 1)
+  eta_postac[i] <- paste(nazwy_beta[aktywne], collapse = " + ")
+}
+
+# =========================
+# Tabela wyników
+# =========================
+tabela_wynikow <- data.frame(
+  "Dzień i godzina" = opis_podgrup,
+  "Średnia liczba klientów" = round(mu_hat, 2),
+  "Postać predyktora" = eta_postac,
+  "Wartość predyktora" = round(eta_hat, 3),
+  check.names = FALSE
+)
+
+# Grupowanie typu dnia
+tabela_wynikow$typ_dnia <- ifelse(
+  grepl("roboczy", tabela_wynikow$`Dzień i godzina`),
+  "roboczy",
+  "weekend"
+)
+tabela_wynikow <- tabela_wynikow[order(tabela_wynikow$typ_dnia),]
+tabela_wynikow$typ_dnia <- NULL
+
+knitr::kable(tabela_wynikow, row.names = FALSE, caption = "Wyniki modelu Poissona dla podgrup dnia i godzin")
+
+# =========================
+# Opis parametrów modelu
+# =========================
+tabela_parametrow <- data.frame(
+  beta = nazwy_beta,
+  nazwa_w_modelu = names(coef(model_agregowany)),
+  wartosc = round(coef(model_agregowany), 4)
+)
+```
+
+**Komentarz:** Tabela przedstawia wartości modelu Poissona dla podgrup wyznaczonych przez typ dnia i przedział godzinowy. W pierwszym wierszu znajdują się podgrupy, w drugim odpowiadające im średnie liczby klientów, natomiast w trzecim i czwartym postać oraz wartość predyktora liniowego $\eta_i$.
+
+Współczynniki modelu interpretujemy następująco: $\beta_0$ odpowiada grupie bazowej (dzień roboczy, godziny 8–12), $\beta_1$ opisuje wpływ weekendu, $\beta_2, \beta_3, \beta_4$ odpowiadają kolejnym przedziałom godzinowym, natomiast $\beta_5, \beta_6, \beta_7$ opisują interakcje weekendu z tymi przedziałami.
+
+Wyniki potwierdzają wnioski z analizy wykresów: najwyższą średnią liczbę klientów obserwujemy w dni robocze w godzinach 16–20, natomiast w weekend przewidywana liczba klientów jest niższa i bardziej wyrównana. Oznacza to, że pora dnia silniej różnicuje ruch klientów w dni robocze niż w weekend.
+
+## Zadanie 6 - Test równości predyktorów liniowych w weekend.
+
+Sprawdź, czy predyktory liniowe dla podgrup godzinowych w weekend są równe, wykorzystując test Walda.
+
+**Komentarz:** Przyjmujemy poziom istotności $\alpha = 0.05$.
+
+Analiza wstępna oraz wyniki przedstawione w tabeli sugerują, że w weekend liczba klientów jest zbliżona niezależnie od pory dnia. W celu sprawdzenia tej obserwacji przeprowadzimy test Walda, badający równość predyktorów liniowych $\eta_i$ dla wszystkich przedziałów godzinowych w weekend.
+
+Testujemy hipotezę zerową:
+$$
+H_0:\ \eta_{\text{weekend},8\text{–}12}
+= \eta_{\text{weekend},12\text{–}16}
+= \eta_{\text{weekend},16\text{–}20}
+= \eta_{\text{weekend},20\text{–}24},
+$$
+która jest równoważna układowi:
+$$
+\begin{cases}
+\beta_2 + \beta_5 = 0 \\
+\beta_3 + \beta_6 = 0 \\
+\beta_4 + \beta_7 = 0
+\end{cases}
+$$
+
+czyli brakowi wpływu przedziału godzinowego na liczbę klientów w weekend.
+
+```{r}
+# =========================
+# Test Walda
+# =========================
+wynik_walda <- linearHypothesis(model_agregowany, c(
+  "godzina_przedzial12-16 + dzien_typweekend:godzina_przedzial12-16 = 0",
+  "godzina_przedzial16-20 + dzien_typweekend:godzina_przedzial16-20 = 0",
+  "godzina_przedzial20-24 + dzien_typweekend:godzina_przedzial20-24 = 0"
+  ))
+
+pwartosc_wald <- wynik_walda$`Pr(>Chisq)`[2]
+
+tabela_walda <- data.frame(
+  Model = c("Model ograniczony", "Model pełny"),
+  "Stopnie swobody" = wynik_walda$Res.Df,
+  "Różnica df" = c(NA, diff(wynik_walda$Res.Df) * (-1)),
+  "Statystyka chi-kwadrat" = c(NA, wynik_walda$Chisq[2]),
+  "p-wartość" = c(NA, wynik_walda$`Pr(>Chisq)`[2]),
+  check.names = FALSE
+)
+
+knitr::kable(tabela_walda, digits = 4, caption = "Wyniki testu Walda dla równości predyktorów liniowych w weekend")
+```
+
+Otrzymana wartość *p* wynosi `r round(pwartosc_wald, 4)`, co oznacza brak podstaw do odrzucenia hipotezy zerowej. W konsekwencji nie ma podstaw do zakładania istotnych różnic między predyktorami liniowymi dla poszczególnych godzin w weekend.
+
+Wynik ten potwierdza, że w weekend liczba klientów pozostaje na zbliżonym poziomie niezależnie od godziny.
+
+## Zadanie 7 - Planowanie liczby pracowników na podstawie średniej liczby klientów.
+
+Właściciel sklepu poprosił, abyś na podstawie wyników tabeli zaplanował optymalną liczbę pracowników oraz grafik pracy. W tym celu załóż, że w ciągu godziny jeden pracownik jest w stanie obsłużyć do $20$ klientów.
+
+```{r}
+# =========================
+# Zapotrzebowanie na pracowników
+# =========================
+limit_klientow_na_pracownika <- 20
+
+tabela_grafiku <- tabela_wynikow[, c("Dzień i godzina", "Średnia liczba klientów")]
+tabela_grafiku$`Liczba pracowników` <- ceiling(
+  tabela_grafiku$`Średnia liczba klientów` / limit_klientow_na_pracownika
+)
+
+knitr::kable(tabela_grafiku, row.names = FALSE, digits = 2, caption = "Plan liczby pracowników w zależności od dnia i godziny")
+```
+
+**Komentarz:** Na podstawie średniej liczby klientów wyznaczono minimalną liczbę pracowników. Największe zapotrzebowanie występuje w dni robocze w godzinach 16–20, natomiast w weekend wystarcza jeden pracownik.
